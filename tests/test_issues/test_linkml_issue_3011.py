@@ -7,11 +7,10 @@ from linkml.generators.shaclgen import ShaclGenerator
 @pytest.mark.xfail(reason="Known bug: shapes with same class_uri incorrectly merged")
 def test_shacl_distinct_shapes_with_native_names():
     """
-    Expected correct behavior:
-    When using native names (non_native_names=False), shapes SHOULD be created per LinkML class
-    even if class_uri is identical.
-
-    This test documents the intended future behavior and currently fails.
+    Expected behavior:
+    When using Class URI's, LinkML classes get merged into one shape based on there class URI. This is not what would be
+    expected from a SHACL Shape, where one owl class might have multiple shapes alligned to it, which should be
+    validated seperately.
     """
 
     test_schema = """
