@@ -349,6 +349,7 @@ type ClassDefinition implements ClassExpression
     unionOf: [ClassDefinition]
     definingSlots: [SlotDefinition]
     treeRoot: Boolean
+    classClosed: Boolean
     uniqueKeys: [UniqueKey]
     rules: [ClassRule]
     classificationRules: [AnonymousClassExpression]

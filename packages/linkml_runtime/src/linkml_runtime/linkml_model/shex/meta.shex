@@ -306,6 +306,7 @@ PREFIX oboInOwl: <http://www.geneontology.org/formats/oboInOwl#>
           <union_of> @<ClassDefinition> * ;
           <defining_slots> @<SlotDefinition> * ;
           <tree_root> @<Boolean> ? ;
+          <class_closed> @<Boolean> ? ;
           <unique_keys> @<UniqueKey> * ;
           sh:rule @<ClassRule> * ;
           <classification_rules> @<AnonymousClassExpression> * ;

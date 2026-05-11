@@ -385,6 +385,22 @@ class JsonSchemaGenerator(Generator, LifecycleMixin):
     not_closed: bool | None = True
     """If not closed, then an open-ended set of attributes can be instantiated for any object"""
 
+    respect_class_closed: bool = False
+    """
+    When ``True``, each class's ``class_closed`` metamodel annotation controls whether
+    ``"additionalProperties"`` is emitted as ``false`` (closed) or ``true`` (open) for that class.
+
+    Classes without an explicit ``class_closed`` annotation fall back to the global
+    ``not_closed`` setting: if ``not_closed=True`` (the default), unannotated classes are open;
+    if ``not_closed=False``, they are closed.
+
+    When ``False`` (the default), per-class ``class_closed`` annotations have no effect and
+    existing behaviour is preserved: all classes get ``"additionalProperties": false``.
+
+    Note: ``linkml:Any`` (unconstrained) classes always get ``"additionalProperties": true``
+    regardless of this flag.
+    """
+
     indent: int = 4
 
     inline: bool = False
@@ -452,8 +468,16 @@ class JsonSchemaGenerator(Generator, LifecycleMixin):
         subschema_type = "object"
         additional_properties = False
         if self.is_class_unconstrained(cls):
+            # linkml:Any is always unconstrained — additionalProperties must be true
             subschema_type = ["null", "boolean", "object", "number", "string"]
             additional_properties = True
+        elif self.respect_class_closed:
+            # Per-class control: respect class_closed annotation from the schema.
+            # Fallback for unannotated classes: use the global not_closed flag
+            # (not_closed=True → default=False for is_class_closed → open → additionalProperties=True)
+            global_default_closed = not self.not_closed
+            class_is_closed = self.schemaview.is_class_closed(cls.name, default=global_default_closed)
+            additional_properties = not class_is_closed
 
         class_subschema = JsonSchema(
             {
@@ -959,6 +983,17 @@ Top level class; slots of this class will become top level properties in the jso
     show_default=True,
     help="""
 Set additionalProperties=False if closed otherwise true if not closed at the global level
+""",
+)
+@click.option(
+    "--respect-class-closed/--no-respect-class-closed",
+    default=False,
+    show_default=True,
+    help="""
+When enabled, each class's 'class_closed' metamodel annotation controls whether
+"additionalProperties" is true or false for that class. Classes without an explicit
+'class_closed' annotation fall back to the global --not-closed/--closed setting.
+Without this flag (default), all classes get "additionalProperties": false (existing behaviour).
 """,
 )
 @click.option(

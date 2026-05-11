@@ -2453,6 +2453,56 @@ def test_is_mixin(schema_view_no_imports: SchemaView) -> None:
     assert not view.is_mixin("BirthEvent")
 
 
+def test_is_class_closed() -> None:
+    """Test is_class_closed method.
+
+    Validates that:
+    - class_closed=true  → is_class_closed returns True
+    - class_closed=false → is_class_closed returns False
+    - class_closed unset → is_class_closed returns the ``default`` argument (True by default)
+    - non-existent class  → is_class_closed returns the ``default`` argument
+    - default argument is respected for unset and missing classes
+    - closure is NOT inherited (parent open, child unset → child gets default, not parent value)
+    """
+    from linkml_runtime.utils.schema_builder import SchemaBuilder
+
+    sb = SchemaBuilder(name="class-closed-test")
+    sb.add_class(ClassDefinition(name="ExplicitlyClosed", class_closed=True))
+    sb.add_class(ClassDefinition(name="ExplicitlyOpen", class_closed=False))
+    sb.add_class(ClassDefinition(name="Unannotated"))
+    # No-inheritance check: parent is open, child has no annotation
+    sb.add_class(ClassDefinition(name="OpenParent", class_closed=False))
+    sb.add_class(ClassDefinition(name="UnannotatedChild", is_a="OpenParent"))
+    view = SchemaView(sb.schema)
+
+    # Explicit true
+    assert view.is_class_closed("ExplicitlyClosed") is True
+    # Explicit false
+    assert view.is_class_closed("ExplicitlyOpen") is False
+    # Unset → default=True
+    assert view.is_class_closed("Unannotated") is True
+    # Unset → custom default=False
+    assert view.is_class_closed("Unannotated", default=False) is False
+    # Non-existent class → default (True)
+    assert view.is_class_closed("DoesNotExist") is True
+    # Non-existent class → custom default=False
+    assert view.is_class_closed("DoesNotExist", default=False) is False
+    # No inheritance: child has no annotation → gets default (True), not parent's False
+    assert view.is_class_closed("UnannotatedChild") is True
+    assert view.is_class_closed("UnannotatedChild", default=False) is False
+
+
+def test_is_class_closed_on_class_definition_field() -> None:
+    """Verify that the class_closed field round-trips correctly through ClassDefinition."""
+    closed_cls = ClassDefinition(name="Closed", class_closed=True)
+    open_cls = ClassDefinition(name="Open", class_closed=False)
+    unset_cls = ClassDefinition(name="Unset")
+
+    assert bool(closed_cls.class_closed) is True
+    assert bool(open_cls.class_closed) is False
+    assert unset_cls.class_closed is None
+
+
 def test_inverse(schema_view_no_imports: SchemaView) -> None:
     """Test inverse method."""
     view = schema_view_no_imports

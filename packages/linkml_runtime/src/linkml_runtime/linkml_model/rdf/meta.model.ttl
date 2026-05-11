@@ -23,42 +23,42 @@
 linkml:meta a linkml:SchemaDefinition ;
     dcterms:license "https://creativecommons.org/publicdomain/zero/1.0/" ;
     dcterms:title "LinkML Schema Metamodel" ;
-    sh:declare [ sh:namespace "http://www.w3.org/ns/prov#"^^xsd:anyURI ;
-            sh:prefix "prov" ],
-        [ sh:namespace "http://purl.org/ontology/bibo/"^^xsd:anyURI ;
-            sh:prefix "bibo" ],
-        [ sh:namespace "http://www.w3.org/2004/02/skos/core#"^^xsd:anyURI ;
+    sh:declare [ sh:namespace "http://www.w3.org/2004/02/skos/core#"^^xsd:anyURI ;
             sh:prefix "skos" ],
-        [ sh:namespace "http://www.w3.org/2008/05/skos-xl#"^^xsd:anyURI ;
-            sh:prefix "skosxl" ],
-        [ sh:namespace "http://open-services.net/ns/core#"^^xsd:anyURI ;
-            sh:prefix "oslc" ],
-        [ sh:namespace "http://www.w3.org/2003/11/swrl#"^^xsd:anyURI ;
-            sh:prefix "swrl" ],
-        [ sh:namespace "http://qudt.org/schema/qudt/"^^xsd:anyURI ;
-            sh:prefix "qudt" ],
-        [ sh:namespace "https://vocab.org/vann/"^^xsd:anyURI ;
-            sh:prefix "vann" ],
-        [ sh:namespace "http://rdf.cdisc.org/mms#"^^xsd:anyURI ;
-            sh:prefix "cdisc" ],
         [ sh:namespace "http://schema.org/"^^xsd:anyURI ;
             sh:prefix "schema" ],
         [ sh:namespace "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#"^^xsd:anyURI ;
             sh:prefix "NCIT" ],
-        [ sh:namespace "http://www.w3.org/ns/shacl#"^^xsd:anyURI ;
-            sh:prefix "sh" ],
+        [ sh:namespace "https://vocab.org/vann/"^^xsd:anyURI ;
+            sh:prefix "vann" ],
         [ sh:namespace "http://purl.org/pav/"^^xsd:anyURI ;
             sh:prefix "pav" ],
-        [ sh:namespace "http://semanticscience.org/resource/SIO_"^^xsd:anyURI ;
-            sh:prefix "SIO" ],
-        [ sh:namespace "https://w3id.org/linkml/"^^xsd:anyURI ;
-            sh:prefix "linkml" ],
-        [ sh:namespace "http://purl.org/linked-data/cube#"^^xsd:anyURI ;
-            sh:prefix "qb" ],
         [ sh:namespace "http://www.w3.org/2002/07/owl#"^^xsd:anyURI ;
             sh:prefix "owl" ],
+        [ sh:namespace "https://w3id.org/linkml/"^^xsd:anyURI ;
+            sh:prefix "linkml" ],
+        [ sh:namespace "http://www.w3.org/ns/prov#"^^xsd:anyURI ;
+            sh:prefix "prov" ],
+        [ sh:namespace "http://open-services.net/ns/core#"^^xsd:anyURI ;
+            sh:prefix "oslc" ],
+        [ sh:namespace "http://qudt.org/schema/qudt/"^^xsd:anyURI ;
+            sh:prefix "qudt" ],
+        [ sh:namespace "http://purl.org/ontology/bibo/"^^xsd:anyURI ;
+            sh:prefix "bibo" ],
+        [ sh:namespace "http://www.w3.org/2003/11/swrl#"^^xsd:anyURI ;
+            sh:prefix "swrl" ],
+        [ sh:namespace "http://www.w3.org/ns/shacl#"^^xsd:anyURI ;
+            sh:prefix "sh" ],
+        [ sh:namespace "http://purl.org/linked-data/cube#"^^xsd:anyURI ;
+            sh:prefix "qb" ],
         [ sh:namespace "http://www.geneontology.org/formats/oboInOwl#"^^xsd:anyURI ;
-            sh:prefix "OIO" ] ;
+            sh:prefix "OIO" ],
+        [ sh:namespace "http://semanticscience.org/resource/SIO_"^^xsd:anyURI ;
+            sh:prefix "SIO" ],
+        [ sh:namespace "http://rdf.cdisc.org/mms#"^^xsd:anyURI ;
+            sh:prefix "cdisc" ],
+        [ sh:namespace "http://www.w3.org/2008/05/skos-xl#"^^xsd:anyURI ;
+            sh:prefix "skosxl" ] ;
     linkml:classes linkml:AltDescription,
         linkml:Annotatable,
         linkml:Annotation,
@@ -148,7 +148,7 @@ refer to the official URI for each construct, e.g.
         linkml:presence_enum,
         linkml:pv_formula_options,
         linkml:relational_role_enum ;
-    linkml:generation_date "2026-05-05T18:49:36"^^xsd:dateTime ;
+    linkml:generation_date "2026-05-11T16:26:30"^^xsd:dateTime ;
     linkml:id "https://w3id.org/linkml/meta"^^xsd:anyURI ;
     linkml:imports "linkml:annotations"^^xsd:anyURI,
         "linkml:extensions"^^xsd:anyURI,
@@ -183,6 +183,7 @@ refer to the official URI for each construct, e.g.
         linkml:broad_mappings,
         linkml:categories,
         linkml:children_are_mutually_disjoint,
+        linkml:class_closed,
         linkml:class_definition_apply_to,
         linkml:class_definition_disjoint_with,
         linkml:class_definition_is_a,
@@ -429,8 +430,8 @@ refer to the official URI for each construct, e.g.
         linkml:values_from,
         linkml:version ;
     linkml:source_file "meta.yaml" ;
-    linkml:source_file_date "2026-05-05T16:16:44"^^xsd:dateTime ;
-    linkml:source_file_size 99888 ;
+    linkml:source_file_date "2026-05-11T11:39:27"^^xsd:dateTime ;
+    linkml:source_file_size 104414 ;
     linkml:subsets linkml:BasicSubset,
         linkml:MinimalSubset,
         linkml:ObjectOrientedProfile,
@@ -843,6 +844,20 @@ linkml:binds_value_of a linkml:SlotDefinition ;
     linkml:owner linkml:EnumBinding ;
     linkml:range linkml:string ;
     linkml:slot_uri "https://w3id.org/linkml/binds_value_of"^^xsd:anyURI .
+
+linkml:class_closed a linkml:SlotDefinition ;
+    OIO:inSubset linkml:BasicSubset ;
+    rdfs:seeAlso "https://www.w3.org/TR/shacl/#ClosedConstraintComponent"^^xsd:anyURI ;
+    skos:editorialNote "Closure semantics are not inherited. A subclass that does not declare class_closed receives the generator default, regardless of its parent's setting.",
+        "Setting class_closed false on a class affects all generators that respect this slot. For generators where open-world semantics are undesirable (e.g. JSON Schema used as a pre-semantic validation gate), use the --respect-class-closed opt-in flag." ;
+    skos:inScheme "https://w3id.org/linkml/meta"^^xsd:anyURI ;
+    linkml:definition_uri "https://w3id.org/linkml/class_closed"^^xsd:anyURI ;
+    linkml:description "If true, the class is treated as closed: instances may not carry properties beyond those declared in the class definition. If false, the class is treated as open and additional properties are permitted. When absent, the effective default is closed (true), preserving the existing LinkML closed-world behaviour for all unannoted classes. This is the per-class analogue of the SHACL sh:closed constraint." ;
+    linkml:domain linkml:ClassDefinition ;
+    linkml:domain_of linkml:ClassDefinition ;
+    linkml:owner linkml:ClassDefinition ;
+    linkml:range linkml:boolean ;
+    linkml:slot_uri "https://w3id.org/linkml/class_closed"^^xsd:anyURI .
 
 linkml:class_definition_apply_to a linkml:SlotDefinition ;
     bibo:status "testing"^^xsd:anyURI ;
@@ -1288,11 +1303,24 @@ Possible values:
             linkml:description "Allow additional data if they are instances of the class definition \"AClassDefinition\"" ;
             linkml:object [ linkml:range_expression [ linkml:range linkml:AClassDefinition ] ] ],
         [ a linkml:Example ;
+            linkml:description "Allow all additional data" ;
+            linkml:object [ linkml:allowed true ] ],
+        [ a linkml:Example ;
+            linkml:description """A semantically *invalid* use of `extra_slots`, as extra slots will be forbidden and the
+`anonymous_slot_expression` will be ignored.
+""" ;
+            linkml:object [ linkml:allowed false ;
+                    linkml:range_expression [ linkml:range linkml:string ] ] ],
+        [ a linkml:Example ;
             linkml:description """Allow additional data if they are integers.
 `required` is meaningless in this context and ignored, since by definition all "extra" slots are optional.
 """ ;
             linkml:object [ linkml:range_expression [ linkml:range linkml:integer ;
                             linkml:required true ] ] ],
+        [ a linkml:Example ;
+            linkml:description "allow additional data if they are either strings or integers" ;
+            linkml:object [ linkml:range_expression [ linkml:any_of [ linkml:range linkml:string ],
+                                [ linkml:range linkml:integer ] ] ] ],
         [ a linkml:Example ;
             linkml:description "Forbid any additional data" ;
             linkml:object [ linkml:allowed false ] ],
@@ -1305,20 +1333,7 @@ Note that this does *not* mean that a maximum of 5 extra slots are allowed.
                             linkml:range linkml:integer ] ] ],
         [ a linkml:Example ;
             linkml:description "Allow additional data that are strings" ;
-            linkml:object [ linkml:range_expression [ linkml:range linkml:string ] ] ],
-        [ a linkml:Example ;
-            linkml:description """A semantically *invalid* use of `extra_slots`, as extra slots will be forbidden and the
-`anonymous_slot_expression` will be ignored.
-""" ;
-            linkml:object [ linkml:allowed false ;
-                    linkml:range_expression [ linkml:range linkml:string ] ] ],
-        [ a linkml:Example ;
-            linkml:description "allow additional data if they are either strings or integers" ;
-            linkml:object [ linkml:range_expression [ linkml:any_of [ linkml:range linkml:integer ],
-                                [ linkml:range linkml:string ] ] ] ],
-        [ a linkml:Example ;
-            linkml:description "Allow all additional data" ;
-            linkml:object [ linkml:allowed true ] ] ;
+            linkml:object [ linkml:range_expression [ linkml:range linkml:string ] ] ] ;
     linkml:inlined true ;
     linkml:inlined_as_list true ;
     linkml:owner linkml:ClassDefinition ;
@@ -5341,9 +5356,9 @@ linkml:UnitOfMeasure a linkml:ClassDefinition ;
     linkml:any_of [ a linkml:AnonymousClassExpression ;
             linkml:slot_conditions linkml:iec61360code ],
         [ a linkml:AnonymousClassExpression ;
-            linkml:slot_conditions linkml:exact_mappings ],
-        [ a linkml:AnonymousClassExpression ;
             linkml:slot_conditions linkml:ucum_code ],
+        [ a linkml:AnonymousClassExpression ;
+            linkml:slot_conditions linkml:exact_mappings ],
         [ a linkml:AnonymousClassExpression ;
             linkml:slot_conditions linkml:symbol ] ;
     linkml:class_uri "http://qudt.org/schema/qudt/Unit"^^xsd:anyURI ;
@@ -6454,6 +6469,7 @@ linkml:ClassDefinition a linkml:ClassDefinition ;
         linkml:broad_mappings,
         linkml:categories,
         linkml:children_are_mutually_disjoint,
+        linkml:class_closed,
         linkml:class_definition_apply_to,
         linkml:class_definition_disjoint_with,
         linkml:class_definition_is_a,

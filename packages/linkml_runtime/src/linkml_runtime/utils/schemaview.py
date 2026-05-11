@@ -1548,6 +1548,28 @@ class SchemaView:
         element = self.get_element(element_name)
         return element.mixin if isinstance(element, Definition) else False
 
+    def is_class_closed(self, class_name: CLASS_NAME, default: bool = True) -> bool:
+        """Return whether the class enforces closed-world semantics.
+
+        Returns the value of ``class_closed`` if explicitly set on the class definition.
+        If ``class_closed`` is not set (``None``), returns ``default``.
+
+        By convention ``default=True`` preserves the existing LinkML closed-world assumption for
+        all classes that do not carry an explicit ``class_closed`` annotation, ensuring backward
+        compatibility with legacy schemas.
+
+        Closure is **not** inherited: a subclass that does not declare ``class_closed`` receives
+        the ``default`` value regardless of its parent's setting.
+
+        :param class_name: name of the class to query
+        :param default: value to return when ``class_closed`` is not explicitly set (default True)
+        :return: effective closed state for the class
+        """
+        cls = self.get_class(class_name)
+        if cls is None or cls.class_closed is None:
+            return default
+        return bool(cls.class_closed)
+
     @lru_cache(None)
     def inverse(self, slot_name: SlotDefinition):
         """Determine whether the given name is a relationship, and return the inverse (if available).

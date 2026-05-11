@@ -919,3 +919,71 @@ classes:
     # InteractionAssociation should have narrowed constraint
     interaction_predicate = json_schema["$defs"]["InteractionAssociation"]["properties"]["predicate"]
     assert interaction_predicate["enum"] == ["interacts_with", "physically_interacts_with"]
+
+
+# ---------------------------------------------------------------------------
+# Per-class class_closed tests (Phase 3 of the class_closed implementation)
+# ---------------------------------------------------------------------------
+
+
+def test_respect_class_closed_open_class(input_path):
+    """With --respect-class-closed, a class with class_closed: false gets additionalProperties: true."""
+    gen = JsonSchemaGenerator(input_path("class_closed_test.yaml"), mergeimports=True, respect_class_closed=True)
+    schema = json.loads(gen.serialize())
+
+    open_class = schema["$defs"]["ExplicitlyOpen"]
+    assert open_class["additionalProperties"] is True, (
+        "ExplicitlyOpen (class_closed: false) must have additionalProperties: true"
+    )
+
+
+def test_respect_class_closed_closed_class(input_path):
+    """With --respect-class-closed, a class with class_closed: true gets additionalProperties: false."""
+    gen = JsonSchemaGenerator(input_path("class_closed_test.yaml"), mergeimports=True, respect_class_closed=True)
+    schema = json.loads(gen.serialize())
+
+    closed_class = schema["$defs"]["ExplicitlyClosed"]
+    assert closed_class["additionalProperties"] is False, (
+        "ExplicitlyClosed (class_closed: true) must have additionalProperties: false"
+    )
+
+
+def test_respect_class_closed_unannotated_follows_global_flag(input_path):
+    """With --respect-class-closed, unannotated classes follow the global not_closed flag.
+
+    - not_closed=True (default, open)  → unannotated classes get additionalProperties: true
+    - not_closed=False (closed)        → unannotated classes get additionalProperties: false
+    """
+    # not_closed=True (default): unannotated should be open
+    gen_open = JsonSchemaGenerator(
+        input_path("class_closed_test.yaml"), mergeimports=True, respect_class_closed=True, not_closed=True
+    )
+    schema_open = json.loads(gen_open.serialize())
+    assert schema_open["$defs"]["Unannotated"]["additionalProperties"] is True, (
+        "Unannotated class must be open when not_closed=True and respect_class_closed=True"
+    )
+
+    # not_closed=False (closed): unannotated should be closed
+    gen_closed = JsonSchemaGenerator(
+        input_path("class_closed_test.yaml"), mergeimports=True, respect_class_closed=True, not_closed=False
+    )
+    schema_closed = json.loads(gen_closed.serialize())
+    assert schema_closed["$defs"]["Unannotated"]["additionalProperties"] is False, (
+        "Unannotated class must be closed when not_closed=False and respect_class_closed=True"
+    )
+
+
+def test_no_respect_class_closed_backward_compat(input_path):
+    """Without --respect-class-closed (default), class_closed annotations have no effect.
+
+    All classes should still get additionalProperties: false (existing behaviour).
+    """
+    gen = JsonSchemaGenerator(input_path("class_closed_test.yaml"), mergeimports=True, respect_class_closed=False)
+    schema = json.loads(gen.serialize())
+
+    # Even ExplicitlyOpen should be closed when respect_class_closed=False
+    assert schema["$defs"]["ExplicitlyOpen"]["additionalProperties"] is False, (
+        "Without --respect-class-closed, ExplicitlyOpen must still get additionalProperties: false"
+    )
+    assert schema["$defs"]["ExplicitlyClosed"]["additionalProperties"] is False
+    assert schema["$defs"]["Unannotated"]["additionalProperties"] is False

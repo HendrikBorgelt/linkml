@@ -260,6 +260,7 @@ message ClassDefinition
  repeated  classDefinition unionOf = 0
  repeated  slotDefinition definingSlots = 0
   boolean treeRoot = 31
+  boolean classClosed = 0
  repeated  uniqueKey uniqueKeys = 0
  repeated  classRule rules = 0
  repeated  anonymousClassExpression classificationRules = 0

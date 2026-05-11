@@ -267,7 +267,7 @@ linkml:extensions a linkml:SchemaDefinition,
     linkml:domain_of linkml:Extensible,
         linkml:Extension ;
     linkml:emit_prefixes "linkml" ;
-    linkml:generation_date "2026-05-05T18:49:25"^^xsd:dateTime ;
+    linkml:generation_date "2026-05-11T16:26:12"^^xsd:dateTime ;
     linkml:id "https://w3id.org/linkml/extensions"^^xsd:anyURI ;
     linkml:imports "linkml:types"^^xsd:anyURI ;
     linkml:inlined true ;
@@ -280,8 +280,8 @@ linkml:extensions a linkml:SchemaDefinition,
         linkml:extension_value,
         linkml:extensions ;
     linkml:source_file "extensions.yaml" ;
-    linkml:source_file_date "2026-05-05T18:15:54"^^xsd:dateTime ;
-    linkml:source_file_size 1164 ;
+    linkml:source_file_date "2026-05-11T16:09:45"^^xsd:dateTime ;
+    linkml:source_file_size 1225 ;
     linkml:types linkml:boolean,
         linkml:curie,
         linkml:date,

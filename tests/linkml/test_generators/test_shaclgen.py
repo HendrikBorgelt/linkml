@@ -228,13 +228,13 @@ def test_shacl(kitchen_sink_path):
 
 def test_shacl_closed(kitchen_sink_path):
     """tests shacl generation"""
-    shaclstr = ShaclGenerator(kitchen_sink_path, mergeimports=True, closed=False).serialize()
+    shaclstr = ShaclGenerator(kitchen_sink_path, mergeimports=True, closed="false").serialize()
     do_test(shaclstr, EXPECTED_closed, EXPECTED_any_of, EXPECTED_equals_string)
 
 
 def test_shacl_suffix(kitchen_sink_path):
     """tests shacl generation with suffix option"""
-    shaclstr = ShaclGenerator(kitchen_sink_path, mergeimports=True, closed=True, suffix="Shape").serialize()
+    shaclstr = ShaclGenerator(kitchen_sink_path, mergeimports=True, closed="true", suffix="Shape").serialize()
     do_test(shaclstr, EXPECTED_suffix, EXPECTED_any_of_with_suffix, EXPECTED_equals_string_with_suffix)
 
 
@@ -1160,3 +1160,139 @@ classes:
     uri_ref = props["https://example.org/uriRef"]
     uri_kinds = list(g.objects(uri_ref, SH.nodeKind))
     assert SH.IRI in uri_kinds, f"Expected sh:IRI for uri, got {uri_kinds}"
+
+
+# ---------------------------------------------------------------------------
+# Per-class class_closed tests (Phase 2 of the class_closed implementation)
+# ---------------------------------------------------------------------------
+
+_CLASS_CLOSED_SCHEMA = "class_closed_test.yaml"
+
+# URIs matching the classes in class_closed_test.yaml
+_URI_EXPLICITLY_CLOSED = URIRef("https://example.org/ExplicitlyClosed")
+_URI_EXPLICITLY_OPEN = URIRef("https://example.org/ExplicitlyOpen")
+_URI_UNANNOTATED = URIRef("https://example.org/Unannotated")
+_URI_CLOSED_MIXIN = URIRef("https://example.org/ClosedMixin")
+
+
+def _parse_shacl_closed(g: rdflib.Graph) -> dict:
+    """Return a mapping from shape URI → sh:closed value (True/False/None) for the test schema."""
+    result = {}
+    for shape, _, val in g.triples((None, SH.closed, None)):
+        result[shape] = bool(val.toPython())
+    return result
+
+
+def test_per_class_closed_default_mode(input_path):
+    """Default mode (no closed= arg): closed defaults to 'schema_defined'.
+
+    Verifies that omitting the argument is identical to passing closed='schema_defined'
+    explicitly — both must produce the same graph.
+    """
+    gen_default = ShaclGenerator(input_path(_CLASS_CLOSED_SCHEMA), mergeimports=True)
+    gen_explicit = ShaclGenerator(input_path(_CLASS_CLOSED_SCHEMA), mergeimports=True, closed="schema_defined")
+
+    closed_default = _parse_shacl_closed(gen_default.as_graph())
+    closed_explicit = _parse_shacl_closed(gen_explicit.as_graph())
+
+    assert closed_default == closed_explicit, "Omitting closed= must produce the same output as closed='schema_defined'"
+
+
+def test_per_class_closed_schema_defined(input_path):
+    """closed='schema_defined': per-class annotations respected, unannotated classes default to closed.
+
+    - ExplicitlyClosed (class_closed: true)          → sh:closed true
+    - ExplicitlyOpen   (class_closed: false)         → sh:closed false
+    - Unannotated      (no annotation)               → sh:closed true  (fallback = closed)
+    - ClosedMixin      (class_closed: true, mixin)   → sh:closed false  (mixin always open)
+    """
+    gen = ShaclGenerator(input_path(_CLASS_CLOSED_SCHEMA), mergeimports=True, closed="schema_defined")
+    closed = _parse_shacl_closed(gen.as_graph())
+
+    assert closed.get(_URI_EXPLICITLY_CLOSED) is True, "ExplicitlyClosed must be sh:closed true"
+    assert closed.get(_URI_EXPLICITLY_OPEN) is False, "ExplicitlyOpen must be sh:closed false"
+    assert closed.get(_URI_UNANNOTATED) is True, "Unannotated must default to sh:closed true"
+    assert closed.get(_URI_CLOSED_MIXIN) is False, "Mixin must be sh:closed false even with class_closed: true"
+
+
+def test_schema_defined_and_true_are_identical(input_path):
+    """'schema_defined' and 'true' must produce identical output.
+
+    Both use default=True in is_class_closed(), so every class resolves to the same
+    effective closure.  This test guards against the two modes silently diverging.
+    """
+    gen_sd = ShaclGenerator(input_path(_CLASS_CLOSED_SCHEMA), mergeimports=True, closed="schema_defined")
+    gen_true = ShaclGenerator(input_path(_CLASS_CLOSED_SCHEMA), mergeimports=True, closed="true")
+
+    assert _parse_shacl_closed(gen_sd.as_graph()) == _parse_shacl_closed(gen_true.as_graph()), (
+        "closed='schema_defined' and closed='true' must produce identical sh:closed values"
+    )
+
+
+def test_per_class_closed_default_open_fallback(input_path):
+    """closed='false': unannotated classes default to open; explicit annotations still honoured.
+
+    - ExplicitlyClosed (class_closed: true)  → sh:closed true  (annotation overrides open fallback)
+    - ExplicitlyOpen   (class_closed: false) → sh:closed false
+    - Unannotated      (no annotation)       → sh:closed false  (fallback = open)
+    - ClosedMixin      (mixin: true)         → sh:closed false
+    """
+    gen = ShaclGenerator(input_path(_CLASS_CLOSED_SCHEMA), mergeimports=True, closed="false")
+    g = gen.as_graph()
+    closed = _parse_shacl_closed(g)
+
+    assert closed.get(_URI_EXPLICITLY_CLOSED) is True, "ExplicitlyClosed must stay closed despite open fallback"
+    assert closed.get(_URI_EXPLICITLY_OPEN) is False, "ExplicitlyOpen must be sh:closed false"
+    assert closed.get(_URI_UNANNOTATED) is False, "Unannotated must be sh:closed false with open fallback"
+    assert closed.get(_URI_CLOSED_MIXIN) is False, "Mixin must be sh:closed false"
+
+
+def test_per_class_force_closed(input_path):
+    """closed='forced_closed': ALL shapes forced closed, class_closed annotations ignored.
+
+    - ExplicitlyOpen (class_closed: false)  → sh:closed true  (force overrides annotation)
+    - Unannotated                           → sh:closed true
+    - ClosedMixin (mixin: true)             → sh:closed false  (mixin exemption still applies)
+    """
+    gen = ShaclGenerator(input_path(_CLASS_CLOSED_SCHEMA), mergeimports=True, closed="forced_closed")
+    g = gen.as_graph()
+    closed = _parse_shacl_closed(g)
+
+    assert closed.get(_URI_EXPLICITLY_CLOSED) is True
+    assert closed.get(_URI_EXPLICITLY_OPEN) is True, "forced_closed must override class_closed: false"
+    assert closed.get(_URI_UNANNOTATED) is True
+    assert closed.get(_URI_CLOSED_MIXIN) is False, "Mixin exemption must still apply under forced_closed"
+
+
+def test_per_class_force_open(input_path):
+    """closed='forced_open': ALL shapes forced open, class_closed annotations ignored.
+
+    - ExplicitlyClosed (class_closed: true) → sh:closed false  (force overrides annotation)
+    - ExplicitlyOpen                        → sh:closed false
+    - Unannotated                           → sh:closed false
+    - ClosedMixin (mixin: true)             → sh:closed false
+    """
+    gen = ShaclGenerator(input_path(_CLASS_CLOSED_SCHEMA), mergeimports=True, closed="forced_open")
+    g = gen.as_graph()
+    closed = _parse_shacl_closed(g)
+
+    assert closed.get(_URI_EXPLICITLY_CLOSED) is False, "forced_open must override class_closed: true"
+    assert closed.get(_URI_EXPLICITLY_OPEN) is False
+    assert closed.get(_URI_UNANNOTATED) is False
+    assert closed.get(_URI_CLOSED_MIXIN) is False
+
+
+def test_per_class_backward_compat_no_annotation(kitchen_sink_path):
+    """Regression guard: kitchen_sink schema (no class_closed annotations) with default mode
+    must produce the same sh:closed true for regular classes as before.
+
+    This verifies that adding class_closed support does not change behaviour for
+    existing schemas that have no class_closed annotations.
+    """
+    gen = ShaclGenerator(kitchen_sink_path, mergeimports=True)
+    g = gen.as_graph()
+
+    person_uri = URIRef("https://w3id.org/linkml/tests/kitchen_sink/Person")
+    person_closed = list(g.objects(person_uri, SH.closed))
+    assert person_closed, "Person shape must have an sh:closed triple"
+    assert person_closed[0].toPython() is True, "Person must be sh:closed true with default mode on legacy schema"

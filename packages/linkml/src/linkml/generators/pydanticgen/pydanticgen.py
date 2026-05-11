@@ -100,6 +100,14 @@ DEFAULT_IMPORTS = (
 
 DEFAULT_INJECTS = [includes.LinkMLMeta]
 
+_OPEN_BASE_MODEL_NAME = "LinkMLOpenModel"
+_OPEN_BASE_MODEL_SRC = """\
+class LinkMLOpenModel(ConfiguredBaseModel):
+    \"\"\"Base for LinkML classes declared with class_closed: false (open-world semantics).\"\"\"
+
+    model_config = ConfigDict(extra="allow")
+"""
+
 
 class MetadataMode(str, Enum):
     FULL = "full"
@@ -239,6 +247,14 @@ class PydanticGenerator(OOCodeGenerator, LifecycleMixin):
     the default templates will be used.
     """
     extra_fields: Literal["allow", "forbid", "ignore"] = "forbid"
+    respect_class_closed: bool = False
+    """
+    When True, the ``class_closed`` annotation on each LinkML class controls
+    ``ConfigDict(extra=...)``. Classes with ``class_closed: false`` get
+    ``extra="allow"``; others use the global :attr:`extra_fields` setting.
+    Without this flag, :attr:`extra_fields` applies uniformly to all classes
+    (existing behaviour).
+    """
     gen_mixin_inheritance: bool = True
     injected_classes: list[type | str] | None = None
     """
@@ -481,9 +497,27 @@ class PydanticGenerator(OOCodeGenerator, LifecycleMixin):
             return self._generate_union_class(cls)
 
         class_python_name = self._get_class_python_name(cls.name)
+
+        # Determine base class(es) — may be overridden for per-class open semantics.
+        if self.respect_class_closed:
+            global_default_closed = self.extra_fields == "forbid"
+            class_is_closed = self.schemaview.is_class_closed(cls.name, default=global_default_closed)
+            if not class_is_closed:
+                # Class is open: prepend LinkMLOpenModel so its model_config (extra="allow")
+                # takes precedence in the MRO over any closed parent's config.
+                existing = self.class_bases.get(class_python_name)
+                if existing is None:
+                    bases: str | list[str] = _OPEN_BASE_MODEL_NAME
+                else:
+                    bases = [_OPEN_BASE_MODEL_NAME] + list(existing)
+            else:
+                bases = self.class_bases.get(class_python_name, PydanticBaseModel.default_name)
+        else:
+            bases = self.class_bases.get(class_python_name, PydanticBaseModel.default_name)
+
         pyclass = PydanticClass(
             name=class_python_name,
-            bases=self.class_bases.get(class_python_name, PydanticBaseModel.default_name),
+            bases=bases,
             description=cls.description.replace('"', '\\"') if cls.description is not None else None,
         )
 
@@ -1121,6 +1155,10 @@ class PydanticGenerator(OOCodeGenerator, LifecycleMixin):
         injected_classes = DEFAULT_INJECTS.copy()
         if self.injected_classes is not None:
             injected_classes += self.injected_classes.copy()
+        if self.respect_class_closed:
+            # Inject the open base model so that classes with class_closed: false can
+            # inherit from it and thereby get extra="allow" in their ConfigDict.
+            injected_classes.append(_OPEN_BASE_MODEL_SRC)
 
         # enums
         enums = self.before_generate_enums(list(sv.all_enums().values()), sv)
@@ -1363,6 +1401,17 @@ Available templates to override:
     help="How to handle extra fields in BaseModel.",
 )
 @click.option(
+    "--respect-class-closed/--no-respect-class-closed",
+    default=False,
+    show_default=True,
+    help=(
+        "When enabled, the 'class_closed' annotation on each LinkML class controls "
+        'ConfigDict(extra=...). Classes with class_closed=false get extra="allow"; '
+        "others use the global --extra-fields setting. Without this flag, --extra-fields "
+        "applies uniformly to all classes (existing behaviour)."
+    ),
+)
+@click.option(
     "--black",
     is_flag=True,
     default=False,
@@ -1394,6 +1443,7 @@ def cli(
     slots=True,
     array_representations=list("list"),
     extra_fields: Literal["allow", "forbid", "ignore"] = "forbid",
+    respect_class_closed: bool = False,
     black: bool = False,
     meta: MetadataMode = "auto",
     emptylist_for_multivalued_slots: bool = False,
@@ -1414,6 +1464,7 @@ def cli(
         yamlfile,
         array_representations=[ArrayRepresentation(x) for x in array_representations],
         extra_fields=extra_fields,
+        respect_class_closed=respect_class_closed,
         emit_metadata=head,
         genmeta=genmeta,
         gen_classvars=classvars,

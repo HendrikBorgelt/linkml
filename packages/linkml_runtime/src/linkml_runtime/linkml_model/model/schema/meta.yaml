@@ -1304,6 +1304,26 @@ slots:
     see_also:
       - https://linkml.io/linkml/intro/tutorial02.html
 
+  class_closed:
+    domain: class_definition
+    range: boolean
+    description: >-
+      If true, the class is treated as closed: instances may not carry properties beyond those
+      declared in the class definition. If false, the class is treated as open and additional
+      properties are permitted. When absent, the effective default is closed (true), preserving
+      the existing LinkML closed-world behaviour for all unannoted classes.
+      This is the per-class analogue of the SHACL sh:closed constraint.
+    notes:
+      - Closure semantics are not inherited. A subclass that does not declare class_closed
+        receives the generator default, regardless of its parent's setting.
+      - Setting class_closed false on a class affects all generators that respect this slot.
+        For generators where open-world semantics are undesirable (e.g. JSON Schema used as a
+        pre-semantic validation gate), use the --respect-class-closed opt-in flag.
+    see_also:
+      - https://www.w3.org/TR/shacl/#ClosedConstraintComponent
+    in_subset:
+      - BasicSubset
+
   unique_keys:
     domain: class_definition
     range: unique_key
@@ -3084,6 +3104,7 @@ classes:
       - union_of
       - defining_slots
       - tree_root
+      - class_closed
       - unique_keys
       - rules
       - classification_rules

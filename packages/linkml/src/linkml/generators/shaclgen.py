@@ -54,8 +54,28 @@ class ShaclGenerator(Generator):
     """
 
     # ClassVars
-    closed: bool = True
-    """True means add 'sh:closed=true' to all shapes, except of mixin shapes and shapes, that have parents"""
+    closed: str = "schema_defined"
+    """
+    Controls how ``sh:closed`` is emitted for every ``NodeShape``.  Five named modes:
+
+    ``"schema_defined"`` *(default)* — each class's ``class_closed`` annotation is
+    respected; classes without an annotation default to closed, preserving the
+    existing LinkML closed-world assumption.
+
+    ``"true"`` — unannotated classes are treated as closed; explicit
+    ``class_closed: false`` annotations are still honoured.
+
+    ``"false"`` — unannotated classes are treated as open; explicit
+    ``class_closed: true`` annotations are still honoured.
+
+    ``"forced_closed"`` — ALL non-mixin, non-abstract classes emit ``sh:closed true``,
+    ignoring any ``class_closed`` annotations in the schema.
+
+    ``"forced_open"`` — ALL classes emit ``sh:closed false``, ignoring any
+    ``class_closed`` annotations in the schema.
+
+    Mixins and abstract classes are always kept open regardless of mode.
+    """
     suffix: str = None
     """parameterized suffix to be appended. No suffix per default."""
     include_annotations: bool = False
@@ -122,13 +142,22 @@ class ShaclGenerator(Generator):
             shape_pv(RDF.type, SH.NodeShape)
             shape_pv(SH.targetClass, class_uri)  # TODO
 
-            if self.closed:
-                if c.mixin or c.abstract:
-                    shape_pv(SH.closed, Literal(False))
-                else:
-                    shape_pv(SH.closed, Literal(True))
-            else:
+            # Determine effective closure for this class.
+            if self.closed == "forced_closed":
+                effective_closed = True
+            elif self.closed == "forced_open":
+                effective_closed = False
+            elif self.closed == "false":
+                effective_closed = sv.is_class_closed(c.name, default=False)
+            else:  # "schema_defined" or "true" — both default unannotated classes to closed
+                effective_closed = sv.is_class_closed(c.name, default=True)
+
+            # Mixins and abstract classes are always open: they exist as structural building
+            # blocks and are not expected to be instantiated directly with a fixed property set.
+            if c.mixin or c.abstract:
                 shape_pv(SH.closed, Literal(False))
+            else:
+                shape_pv(SH.closed, Literal(effective_closed))
             if c.title is not None:
                 # Use rdfs:label for NodeShape titles per SHACL spec.
                 # sh:name has rdfs:domain of sh:PropertyShape. See issue #3059.
@@ -486,10 +515,26 @@ def add_simple_data_type(func: Callable, r: ElementName) -> None:
 @shared_arguments(ShaclGenerator)
 @click.command(name="shacl")
 @click.option(
-    "--closed/--non-closed",
-    default=True,
+    "--closed",
+    type=click.Choice(
+        ["schema_defined", "true", "false", "forced_closed", "forced_open"],
+        case_sensitive=False,
+    ),
+    default="schema_defined",
     show_default=True,
-    help="Use '--closed' to generate closed SHACL shapes. Use '--non-closed' to generate open SHACL shapes.",
+    help=(
+        "Controls sh:closed emission for all NodeShapes.\n\n"
+        "\b\n"
+        "  schema_defined  Per-class class_closed annotation is respected;\n"
+        "                  unannotated classes default to closed. (default)\n"
+        "  true            Unannotated classes are closed; explicit\n"
+        "                  class_closed: false annotations still honoured.\n"
+        "  false           Unannotated classes are open; explicit\n"
+        "                  class_closed: true annotations still honoured.\n"
+        "  forced_closed   ALL non-mixin/abstract shapes forced closed,\n"
+        "                  ignoring any class_closed annotations.\n"
+        "  forced_open     ALL shapes forced open, ignoring annotations.\n"
+    ),
 )
 @click.option(
     "-s",

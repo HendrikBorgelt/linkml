@@ -1,0 +1,57 @@
+id: https://example.org/class-closed-test
+name: class-closed-test
+description: >-
+  Minimal schema used to test per-class class_closed semantics across generators.
+  Three ordinary classes cover the three possible class_closed states (true, false, absent).
+  One mixin class with class_closed: true verifies that mixins are always emitted as open
+  regardless of the annotation.
+
+prefixes:
+  ex: "https://example.org/"
+  linkml: "https://w3id.org/linkml/"
+default_prefix: ex
+default_range: string
+imports:
+  - linkml:types
+
+classes:
+
+  ExplicitlyClosed:
+    class_uri: ex:ExplicitlyClosed
+    class_closed: true
+    description: >-
+      class_closed is explicitly true — generators that respect this slot must
+      treat this class as closed.
+    slots:
+      - title
+
+  ExplicitlyOpen:
+    class_uri: ex:ExplicitlyOpen
+    class_closed: false
+    description: >-
+      class_closed is explicitly false — generators that respect this slot must
+      treat this class as open.
+    slots:
+      - title
+
+  Unannotated:
+    class_uri: ex:Unannotated
+    description: >-
+      No class_closed annotation. Effective closure depends on the generator's default / CLI flag.
+    slots:
+      - title
+
+  ClosedMixin:
+    class_uri: ex:ClosedMixin
+    class_closed: true
+    mixin: true
+    description: >-
+      Mixin with class_closed: true. SHACL spec requires mixins to be emitted as open
+      (sh:closed false) regardless of the annotation.
+    slots:
+      - title
+
+slots:
+  title:
+    range: string
+    description: A simple string slot used to give shapes at least one declared property.

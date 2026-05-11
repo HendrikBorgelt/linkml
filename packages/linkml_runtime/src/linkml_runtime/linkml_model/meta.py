@@ -1,5 +1,5 @@
 # Auto generated from meta.yaml by pythongen.py version: 0.0.1
-# Generation date: 2026-05-05T18:49:13
+# Generation date: 2026-05-11T16:25:50
 # Schema: meta
 #
 # id: https://w3id.org/linkml/meta
@@ -3102,6 +3102,7 @@ class ClassDefinition(Definition):
     union_of: Optional[Union[Union[str, ClassDefinitionName], list[Union[str, ClassDefinitionName]]]] = empty_list()
     defining_slots: Optional[Union[Union[str, SlotDefinitionName], list[Union[str, SlotDefinitionName]]]] = empty_list()
     tree_root: Optional[Union[bool, Bool]] = None
+    class_closed: Optional[Union[bool, Bool]] = None
     unique_keys: Optional[
         Union[dict[Union[str, UniqueKeyUniqueKeyName], Union[dict, "UniqueKey"]], list[Union[dict, "UniqueKey"]]]
     ] = empty_dict()
@@ -3168,6 +3169,9 @@ class ClassDefinition(Definition):
 
         if self.tree_root is not None and not isinstance(self.tree_root, Bool):
             self.tree_root = Bool(self.tree_root)
+
+        if self.class_closed is not None and not isinstance(self.class_closed, Bool):
+            self.class_closed = Bool(self.class_closed)
 
         self._normalize_inlined_as_dict(
             slot_name="unique_keys", slot_type=UniqueKey, key_name="unique_key_name", keyed=True
@@ -6173,6 +6177,15 @@ slots.tree_root = Slot(
     name="tree_root",
     curie=LINKML.curie("tree_root"),
     model_uri=LINKML.tree_root,
+    domain=ClassDefinition,
+    range=Optional[Union[bool, Bool]],
+)
+
+slots.class_closed = Slot(
+    uri=LINKML.class_closed,
+    name="class_closed",
+    curie=LINKML.curie("class_closed"),
+    model_uri=LINKML.class_closed,
     domain=ClassDefinition,
     range=Optional[Union[bool, Bool]],
 )

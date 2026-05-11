@@ -3138,3 +3138,105 @@ classes:
     # InteractionAssociation should have narrowed constraint
     # (interacts_with and its descendants only)
     assert 'Literal["interacts_with", "physically_interacts_with"]' in code
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 tests — per-class class_closed semantics in Pydantic generator
+# ---------------------------------------------------------------------------
+
+_CLASS_CLOSED_SCHEMA = """
+id: https://example.org/class-closed-pydantic-test
+name: class-closed-pydantic-test
+prefixes:
+  ex: "https://example.org/"
+  linkml: "https://w3id.org/linkml/"
+default_prefix: ex
+default_range: string
+imports:
+  - linkml:types
+
+classes:
+  ExplicitlyClosed:
+    class_uri: ex:ExplicitlyClosed
+    class_closed: true
+    description: Explicitly closed class.
+    slots:
+      - title
+
+  ExplicitlyOpen:
+    class_uri: ex:ExplicitlyOpen
+    class_closed: false
+    description: Explicitly open class.
+    slots:
+      - title
+
+  Unannotated:
+    class_uri: ex:Unannotated
+    description: No class_closed annotation — should follow global default.
+    slots:
+      - title
+
+slots:
+  title:
+    range: string
+"""
+
+
+def test_respect_class_closed_open_class():
+    """With --respect-class-closed, an open class (class_closed: false) should use
+    LinkMLOpenModel as its base, causing extra fields to be allowed at runtime."""
+    gen = PydanticGenerator(_CLASS_CLOSED_SCHEMA, respect_class_closed=True)
+    code = gen.serialize()
+
+    # LinkMLOpenModel must be injected
+    assert "class LinkMLOpenModel" in code
+    assert 'extra="allow"' in code
+
+    # ExplicitlyOpen must inherit from LinkMLOpenModel
+    assert "class ExplicitlyOpen(LinkMLOpenModel)" in code
+
+    # Closed and unannotated classes must NOT inherit from LinkMLOpenModel
+    assert "class ExplicitlyClosed(LinkMLOpenModel)" not in code
+    assert "class Unannotated(LinkMLOpenModel)" not in code
+
+    # Runtime check: open class accepts extra properties
+    mod = compile_python(code)
+    instance = mod.ExplicitlyOpen(title="hello", extra_prop="world")
+    assert instance.title == "hello"
+
+
+def test_respect_class_closed_closed_class():
+    """With --respect-class-closed, a closed class (class_closed: true or default)
+    must reject extra fields at runtime."""
+    gen = PydanticGenerator(_CLASS_CLOSED_SCHEMA, respect_class_closed=True)
+    code = gen.serialize()
+    mod = compile_python(code)
+
+    # ExplicitlyClosed rejects extra fields
+    with pytest.raises(ValidationError):
+        mod.ExplicitlyClosed(title="hello", extra_prop="should_fail")
+
+    # Unannotated also rejects extra fields (default=closed)
+    with pytest.raises(ValidationError):
+        mod.Unannotated(title="hello", extra_prop="should_fail")
+
+
+def test_no_respect_class_closed_backward_compat():
+    """Without --respect-class-closed, class_closed annotations must have no effect
+    on the generated Pydantic output (existing behaviour is preserved)."""
+    gen = PydanticGenerator(_CLASS_CLOSED_SCHEMA)
+    code = gen.serialize()
+
+    # LinkMLOpenModel must NOT appear (flag is off)
+    assert "class LinkMLOpenModel" not in code
+
+    # All classes should use ConfiguredBaseModel (either directly or via is_a)
+    assert "class ExplicitlyOpen(ConfiguredBaseModel)" in code
+    assert "class ExplicitlyClosed(ConfiguredBaseModel)" in code
+
+    # Runtime: all classes are closed by default (extra_fields="forbid")
+    mod = compile_python(code)
+    with pytest.raises(ValidationError):
+        mod.ExplicitlyOpen(title="hello", extra_prop="should_fail")
+    with pytest.raises(ValidationError):
+        mod.ExplicitlyClosed(title="hello", extra_prop="should_fail")

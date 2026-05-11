@@ -2314,6 +2314,13 @@
                         "null"
                     ]
                 },
+                "class_closed": {
+                    "description": "If true, the class is treated as closed: instances may not carry properties beyond those declared in the class definition. If false, the class is treated as open and additional properties are permitted. When absent, the effective default is closed (true), preserving the existing LinkML closed-world behaviour for all unannoted classes. This is the per-class analogue of the SHACL sh:closed constraint.",
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
                 "class_uri": {
                     "description": "URI of the class that provides a semantic interpretation of the element in a linked data context. The URI may come from any namespace and may be shared between schemas",
                     "type": [
@@ -3015,6 +3022,13 @@
                 },
                 "children_are_mutually_disjoint": {
                     "description": "If true then all direct is_a children are mutually disjoint and share no instances in common",
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "class_closed": {
+                    "description": "If true, the class is treated as closed: instances may not carry properties beyond those declared in the class definition. If false, the class is treated as open and additional properties are permitted. When absent, the effective default is closed (true), preserving the existing LinkML closed-world behaviour for all unannoted classes. This is the per-class analogue of the SHACL sh:closed constraint.",
                     "type": [
                         "boolean",
                         "null"

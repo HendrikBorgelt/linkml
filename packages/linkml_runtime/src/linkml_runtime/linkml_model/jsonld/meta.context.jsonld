@@ -132,6 +132,10 @@
          "@type": "xsd:boolean",
          "@id": "children_are_mutually_disjoint"
       },
+      "class_closed": {
+         "@type": "xsd:boolean",
+         "@id": "class_closed"
+      },
       "class_uri": {
          "@type": "xsd:anyURI",
          "@id": "class_uri"
