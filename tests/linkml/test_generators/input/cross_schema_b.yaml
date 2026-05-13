@@ -1,0 +1,55 @@
+id: https://example.org/kinship/schema
+name: cross_schema_b
+
+prefixes:
+  linkml:  "https://w3id.org/linkml/"
+  family:  "https://example.org/family/"
+  kinship: "https://example.org/kinship/"
+  link:    "https://example.org/linkage/"
+
+imports:
+  - linkml:types
+
+default_range: string
+default_prefix: kinship
+
+classes:
+
+  NodeCollection:
+    tree_root: true
+    description: >-
+      Container holding a list of BridgeNode instances. Same slot name as schema A's
+      container so that the merged data file is readable by both schemas without
+      modification.
+    attributes:
+      nodes:
+        multivalued: true
+        range: BridgeNode
+        inlined_as_list: true
+
+  BridgeNode:
+    class_uri: family:ParentNode
+    class_closed: false
+    description: >-
+      Reuses family:ParentNode as its class_uri so that instances populated in the
+      merged data file are processed correctly during schema B conversion. The bridge
+      origin (family:node-a2) and destination (kinship:node-a3) share their IRIs with
+      A2 and A3 from schema A, enabling merging by IRI identity. Additional properties
+      present in the merged data (e.g. has_successor from schema A) are allowed by
+      class_closed: false and are silently dropped by schema B's JSON-LD context.
+    slots:
+      - id
+      - has_link
+
+slots:
+
+  id:
+    identifier: true
+    range: uri
+
+  has_link:
+    slot_uri: link:hasLink
+    range: BridgeNode
+    description: >-
+      The connecting property. Unknown to schema A; declared here with a slot_uri
+      so that it survives JSON-LD expansion of schema B's conversion output.

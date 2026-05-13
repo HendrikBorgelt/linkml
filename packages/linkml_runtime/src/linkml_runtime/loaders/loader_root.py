@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from abc import ABC, abstractmethod
 from logging import getLogger
 from typing import TYPE_CHECKING, Any, TextIO
@@ -135,13 +136,28 @@ class Loader(ABC):
         """
         return self.load(source, target_class, metadata=metadata)
 
+    @staticmethod
+    def _filter_open_kwargs(target_class: type, data: dict) -> dict:
+        """For classes annotated with ``_class_closed = False`` (open-world semantics), strip
+        any keys that are not declared dataclass fields before calling ``__init__``.  This
+        prevents ``TypeError: __init__() got an unexpected keyword argument`` when loading
+        data files that contain extra properties not present in the current schema.
+
+        Classes without the ``_class_closed`` attribute (the default) are treated as closed and
+        the data dict is returned unchanged.
+        """
+        if not getattr(target_class, "_class_closed", True) and dataclasses.is_dataclass(target_class):
+            known = {f.name for f in dataclasses.fields(target_class)}
+            return {k: v for k, v in data.items() if k in known}
+        return data
+
     def _construct_target_class(
         self, data_as_dict: dict | list[dict], target_class: type[YAMLRoot | BaseModel]
     ) -> BaseModel | YAMLRoot | list[BaseModel] | list[YAMLRoot] | None:
         if data_as_dict:
             if isinstance(data_as_dict, list):
                 if issubclass(target_class, YAMLRoot):
-                    return [target_class(**as_dict(x)) for x in data_as_dict]
+                    return [target_class(**self._filter_open_kwargs(target_class, as_dict(x))) for x in data_as_dict]
                 if issubclass(target_class, BaseModel):
                     return [target_class.model_validate(as_dict(x)) for x in data_as_dict]
                 msg = f"Cannot load list of {target_class}"
@@ -149,10 +165,10 @@ class Loader(ABC):
             if isinstance(data_as_dict, dict):
                 if issubclass(target_class, BaseModel):
                     return target_class.model_validate(data_as_dict)
-                return target_class(**data_as_dict)
+                return target_class(**self._filter_open_kwargs(target_class, data_as_dict))
 
             if isinstance(data_as_dict, JsonObj):
-                return [target_class(**as_dict(x)) for x in data_as_dict]
+                return [target_class(**self._filter_open_kwargs(target_class, as_dict(x))) for x in data_as_dict]
 
             msg = f"Unexpected type {data_as_dict}"
             # should really be a TypeError

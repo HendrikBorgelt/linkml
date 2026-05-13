@@ -590,6 +590,10 @@ version = {'"' + self.schema.version + '"' if self.schema.version else None}
             f'class_name: ClassVar[str] = "{cls.name}"',
             f"class_model_uri: ClassVar[URIRef] = {class_model_uri}",
         ]
+        # Emit _class_closed marker so loaders can filter unknown kwargs for open-world classes.
+        # Only emit when explicitly False; absence means closed (True) — the default.
+        if cls.class_closed is False:
+            vars.append("_class_closed: ClassVar[bool] = False")
         return "\n\t" + "\n\t".join(vars) + "\n"
 
     def gen_type_meta(self, typ: TypeDefinition) -> str:

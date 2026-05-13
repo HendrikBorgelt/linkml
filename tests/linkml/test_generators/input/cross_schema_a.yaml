@@ -1,0 +1,50 @@
+id: https://example.org/family/schema
+name: cross_schema_a
+
+prefixes:
+  linkml:  "https://w3id.org/linkml/"
+  family:  "https://example.org/family/"
+  kinship: "https://example.org/kinship/"
+  rel:     "https://example.org/relations/"
+
+imports:
+  - linkml:types
+
+default_range: string
+default_prefix: family
+
+classes:
+
+  NodeCollection:
+    tree_root: true
+    description: >-
+      Container holding a list of ParentNode instances. Required by linkml-convert
+      as the root object for multi-instance YAML data files.
+    attributes:
+      nodes:
+        multivalued: true
+        range: ParentNode
+        inlined_as_list: true
+
+  ParentNode:
+    class_uri: family:ParentNode
+    class_closed: false
+    description: >-
+      An open-world node. Additional properties beyond has_successor are permitted
+      and will not cause SHACL validation failures. The connecting property contributed
+      by schema B (link:hasLink) is expected to appear on instances of this class in
+      the merged graph without producing a violation.
+    slots:
+      - id
+      - has_successor
+
+slots:
+
+  id:
+    identifier: true
+    range: uri
+
+  has_successor:
+    slot_uri: rel:hasSuccessor
+    range: ParentNode
+    description: Declared relation within schema A.

@@ -1,0 +1,12 @@
+nodes:
+  - id: "https://example.org/family/node-a1"
+    has_successor: "https://example.org/family/node-a2"
+
+  - id: "https://example.org/family/node-a2"
+    # has_link will be added in the merged data file; absent here so schema A's
+    # isolated output contains no bridge triple.
+
+  - id: "https://example.org/kinship/node-a3"
+    has_successor: "https://example.org/kinship/node-a4"
+
+  - id: "https://example.org/kinship/node-a4"

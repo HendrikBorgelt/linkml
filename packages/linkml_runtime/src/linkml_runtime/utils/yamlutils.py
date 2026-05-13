@@ -18,6 +18,22 @@ from linkml_runtime.utils.formatutils import is_empty, items
 
 YAMLObjTypes = Union[JsonObjTypes, "YAMLRoot"]
 
+
+def _filter_open_kwargs(slot_type: type, kwargs: dict) -> dict:
+    """Strip keys not declared as dataclass fields for open-world classes (``_class_closed = False``).
+
+    When a schema class is annotated with ``class_closed: false``, the generated Python
+    dataclass carries ``_class_closed: ClassVar[bool] = False``.  This helper checks for
+    that marker and, when present, returns a copy of *kwargs* containing only the fields
+    declared on *slot_type*.  For closed classes (the default) the original dict is returned
+    unchanged, preserving the existing ``TypeError`` for genuinely unexpected properties.
+    """
+    if not getattr(slot_type, "_class_closed", True) and dataclasses.is_dataclass(slot_type):
+        known = {f.name for f in dataclasses.fields(slot_type)}
+        return {k: v for k, v in kwargs.items() if k in known}
+    return kwargs
+
+
 try:
     from yaml import CSafeLoader as SafeLoader
 except ImportError:
@@ -167,7 +183,7 @@ class YAMLRoot(JsonObj):
                     raw_obj = copy(raw_obj)
                     raw_obj[key_name] = key
                 if not issubclass(type(raw_obj), slot_type):
-                    order_up(key, slot_type(**as_dict(raw_obj)))
+                    order_up(key, slot_type(**_filter_open_kwargs(slot_type, as_dict(raw_obj))))
                 else:
                     order_up(key, raw_obj)
 
@@ -199,7 +215,7 @@ class YAMLRoot(JsonObj):
                                 form_1(list_entry)
                     else:
                         # **kwargs
-                        cooked_obj = slot_type(**as_dict(list_entry))
+                        cooked_obj = slot_type(**_filter_open_kwargs(slot_type, as_dict(list_entry)))
                         order_up(cooked_obj[key_name], cooked_obj)
                 elif isinstance(list_entry, list):
                     # First element is the key; remaining map to non-key fields in order
@@ -220,7 +236,7 @@ class YAMLRoot(JsonObj):
                 and not isinstance(raw_slot[key_name], list | dict | JsonObj)
             ):
                 # Vanilla dictionary - {key: v11, s12: v12, ...}
-                order_up(raw_slot[key_name], slot_type(**as_dict(raw_slot)))
+                order_up(raw_slot[key_name], slot_type(**_filter_open_kwargs(slot_type, as_dict(raw_slot))))
             else:
                 # We have either {key1: {obj1}, key2: {obj2}...} or {key1:, key2:, ...}
                 for k, v in items(raw_slot):

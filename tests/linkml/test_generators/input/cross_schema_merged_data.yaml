@@ -1,0 +1,15 @@
+nodes:
+  - id: "https://example.org/family/node-a1"
+    has_successor: "https://example.org/family/node-a2"
+
+  - id: "https://example.org/family/node-a2"
+    has_link: "https://example.org/kinship/node-a3"
+    # has_link: open-world on schema A — dropped by A's JSON-LD context
+    #           declared in schema B — survives B's JSON-LD expansion
+
+  - id: "https://example.org/kinship/node-a3"
+    has_successor: "https://example.org/kinship/node-a4"
+    # has_successor: declared in schema A — survives A's expansion
+    #               open-world on schema B — dropped by B's JSON-LD context
+
+  - id: "https://example.org/kinship/node-a4"

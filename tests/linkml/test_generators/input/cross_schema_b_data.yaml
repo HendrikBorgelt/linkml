@@ -1,0 +1,3 @@
+nodes:
+  - id: "https://example.org/family/node-a2"
+    has_link: "https://example.org/kinship/node-a3"

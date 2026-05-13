@@ -387,16 +387,29 @@ def patch_requests_cache(pytestconfig):
     )
     requests_cache.clear()
     yield
-    # Close the SQLite backend before uninstalling so the file handle is released
-    import requests
-
-    session = requests.Session()
-    if hasattr(session, "cache"):
-        session.cache.close()
+    # Close the SQLite backend before uninstalling so the file handle is released.
+    # requests_cache.get_cache() returns the active SQLiteCache instance directly.
+    # This must happen *before* uninstall_cache(), which only swaps the session back
+    # to the original requests.Session and does not close the SQLite connection.
+    # On Windows an open file handle prevents unlink(), so explicit close is required.
+    # On Linux/macOS unlink() succeeds on open files, but closing first is still correct.
+    cache = requests_cache.get_cache()
+    if cache is not None:
+        cache.close()
     requests_cache.uninstall_cache()
     # delete cache file unless we have requested it to persist for inspection
     if not pytestconfig.getoption("--with-output"):
-        cache_file.unlink(missing_ok=True)
+        # On Windows, an OS file-system watcher (Defender, Search Indexer) may briefly
+        # hold the SQLite file open just after we release our own handle, causing
+        # PermissionError on unlink().  Retry for up to ~0.5 s before giving up.
+        import time
+
+        for _attempt in range(10):
+            try:
+                cache_file.unlink(missing_ok=True)
+                break
+            except PermissionError:
+                time.sleep(0.05)
 
 
 class MockImportErrorFinder(MetaPathFinder):
