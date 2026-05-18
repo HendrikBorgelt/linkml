@@ -377,3 +377,53 @@ def test_gen_references_cycle_safety_raises_value_error(monkeypatch):
 
     with pytest.raises(ValueError, match="Cyclic wrapper inheritance"):
         generator.gen_references()
+
+
+# ── class_closed tests ────────────────────────────────────────────────────────
+
+
+def test_class_closed_marker_emitted(input_path):
+    """ExplicitlyOpen (class_closed: false) must have _class_closed: ClassVar[bool] = False
+    in the generated Python source."""
+    python_src = PythonGenerator(input_path("class_closed_test.yaml"), mergeimports=True).serialize()
+    # The marker must appear inside the ExplicitlyOpen class body
+    assert "_class_closed: ClassVar[bool] = False" in python_src, (
+        "Expected '_class_closed: ClassVar[bool] = False' in generated Python for "
+        "ExplicitlyOpen (class_closed: false), but it was not found.\n"
+        "Check pythongen.py gen_class_meta() for the class_closed emission logic."
+    )
+
+
+def test_class_closed_marker_absent_for_closed(input_path):
+    """ExplicitlyClosed and Unannotated must NOT carry _class_closed = False.
+    Closed is the default; absence of the marker means closed."""
+    python_src = PythonGenerator(input_path("class_closed_test.yaml"), mergeimports=True).serialize()
+    # Split into per-class sections to check each class independently
+    # The marker should appear exactly once (only for ExplicitlyOpen)
+    marker = "_class_closed: ClassVar[bool] = False"
+    count = python_src.count(marker)
+    assert count == 1, (
+        f"Expected '_class_closed: ClassVar[bool] = False' to appear exactly once "
+        f"(only in ExplicitlyOpen), but found {count} occurrences.\n"
+        "ExplicitlyClosed and Unannotated must not emit the marker."
+    )
+
+
+def test_class_closed_runtime_allows_extra_kwargs(input_path):
+    """A class generated with class_closed: false must accept extra keyword arguments
+    at runtime without raising TypeError, because the loader filters them via
+    _filter_open_kwargs before __init__ is called."""
+    from linkml_runtime.loaders import yaml_loader
+
+    module = make_python(input_path("class_closed_test.yaml"))
+
+    # Verify the ClassVar marker is present on the runtime class
+    assert getattr(module.ExplicitlyOpen, "_class_closed", True) is False, (
+        "ExplicitlyOpen._class_closed must be False at runtime so the loader knows to filter unknown kwargs."
+    )
+
+    # yaml_loader.load with extra fields in a YAML string must succeed for open classes.
+    # The loader calls _filter_open_kwargs which strips fields not declared as dataclass fields.
+    yaml_str = "title: hello\nextra_field: should_be_ignored\n"
+    inst = yaml_loader.loads(yaml_str, target_class=module.ExplicitlyOpen)
+    assert inst.title == "hello", "Declared field 'title' must be set correctly."

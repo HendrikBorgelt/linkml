@@ -113,7 +113,16 @@ class ShExGenerator(Generator):
                 self._type_arc(cls.class_uri, not bool(self.class_identifier(cls))),
             ]
         )
-        self.shape.closed = not (cls.abstract or cls.mixin)
+        # Mixin and abstract classes are always open in ShEx (structural shapes only).
+        # For concrete classes, respect the per-class class_closed annotation.
+        # cls.class_closed is None when unset → default closed (True), preserving existing
+        # behaviour for all schemas that do not explicitly annotate class_closed.
+        if cls.abstract or cls.mixin:
+            self.shape.closed = False
+        elif cls.class_closed is None:
+            self.shape.closed = True  # default: closed
+        else:
+            self.shape.closed = bool(cls.class_closed)
 
         # If this class has subtypes, define the class as the union of its subtypes and itself (if not abstract)
         if cls.name in self.synopsis.isarefs:

@@ -332,3 +332,47 @@ classes:
         "https://example.org/directly_causes",
     }
     assert set(values_found) == expected_uris
+
+
+# ── class_closed tests ────────────────────────────────────────────────────────
+
+
+def test_shex_explicitly_closed_is_closed(input_path):
+    """ExplicitlyClosed (class_closed: true) → CLOSED keyword in ShEx output."""
+    shexstr = ShExGenerator(input_path("class_closed_test.yaml"), mergeimports=True).serialize(collections=False)
+    assert "<ExplicitlyClosed> CLOSED {" in shexstr, (
+        "Expected '<ExplicitlyClosed> CLOSED {' in ShEx output for a class with class_closed: true. "
+        "Check shexgen.py end_class() — it must call schemaview.is_class_closed() and set "
+        "self.shape.closed = True for explicitly closed classes."
+    )
+
+
+def test_shex_explicitly_open_is_not_closed(input_path):
+    """ExplicitlyOpen (class_closed: false) → no CLOSED keyword in ShEx output."""
+    shexstr = ShExGenerator(input_path("class_closed_test.yaml"), mergeimports=True).serialize(collections=False)
+    assert "<ExplicitlyOpen> CLOSED {" not in shexstr, (
+        "ExplicitlyOpen has class_closed: false but CLOSED appeared in the ShEx output. "
+        "Check shexgen.py end_class() — is_class_closed() must return False for this class."
+    )
+    assert "<ExplicitlyOpen> {" in shexstr, (
+        "Expected '<ExplicitlyOpen> {' (open shape) in ShEx output for class_closed: false class."
+    )
+
+
+def test_shex_unannotated_defaults_to_closed(input_path):
+    """Unannotated class (no class_closed annotation) → CLOSED by default."""
+    shexstr = ShExGenerator(input_path("class_closed_test.yaml"), mergeimports=True).serialize(collections=False)
+    assert "<Unannotated> CLOSED {" in shexstr, (
+        "Unannotated class must default to CLOSED in ShEx output to preserve existing behaviour. "
+        "Check that is_class_closed() uses default=True in shexgen.py end_class()."
+    )
+
+
+def test_shex_mixin_always_open_regardless_of_class_closed(input_path):
+    """ClosedMixin has class_closed: true but is a mixin → must NOT be CLOSED in ShEx."""
+    shexstr = ShExGenerator(input_path("class_closed_test.yaml"), mergeimports=True).serialize(collections=False)
+    assert "<ClosedMixin> CLOSED {" not in shexstr, (
+        "ClosedMixin is a mixin with class_closed: true, but CLOSED appeared in the ShEx output. "
+        "Mixins must always be open in ShEx regardless of class_closed, because their shapes "
+        "are structural only (they combine into concrete shapes that may themselves be closed)."
+    )
