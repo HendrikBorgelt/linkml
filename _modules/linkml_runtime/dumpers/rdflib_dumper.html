@@ -249,6 +249,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/json-schema.html">JSON Schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/protobuf.html">ProtoBuf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/graphql.html">GraphQL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../generators/openapi.html">OpenAPI</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/jsonld-context.html">JSON-LD Contexts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/jsonld.html">JSON-LD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/rdf.html">RDF</a></li>
@@ -269,6 +270,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/sqltable.html">SQL DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/sqlalchemy.html">SQL Alchemy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/sqlvalidation.html">SQL Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../generators/bigquery.html">BigQuery DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/typedb.html">TypeDB / TypeQL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/linkml.html">LinkML Generators</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/prefixmap.html">Prefix Generator</a></li>
@@ -361,6 +363,8 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../maintainers/index.html">Maintainers Guide</a><input aria-label="Toggle navigation of Maintainers Guide" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/contributing.html">Contribution Guidelines</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/organization.html">GitHub Organization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../maintainers/contributor-hierarchy.html">Contributor Hierarchy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../maintainers/codeowners.html">CODEOWNERS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/deprecation.html">Deprecations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/code-of-conduct.html">Code of Conduct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/generator-governance.html">Generator and Validator Governance</a></li>
@@ -446,6 +450,7 @@
 <span class="sd">        :return:</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">g</span> <span class="o">=</span> <span class="n">Graph</span><span class="p">()</span>
+        <span class="n">schemaview</span><span class="o">.</span><span class="n">imports_closure</span><span class="p">()</span>  <span class="c1"># ensure all imported sub-schemas are in schema_map before namespaces() caches</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">prefix_map</span><span class="p">,</span> <span class="n">Converter</span><span class="p">):</span>
             <span class="c1"># TODO replace with `prefix_map = prefix_map.bimap` after making minimum requirement on python 3.8</span>
             <span class="n">prefix_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">record</span><span class="o">.</span><span class="n">prefix</span><span class="p">:</span> <span class="n">record</span><span class="o">.</span><span class="n">uri_prefix</span> <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">prefix_map</span><span class="o">.</span><span class="n">records</span><span class="p">}</span>

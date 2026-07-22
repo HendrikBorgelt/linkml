@@ -249,6 +249,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/json-schema.html">JSON Schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/protobuf.html">ProtoBuf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/graphql.html">GraphQL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../generators/openapi.html">OpenAPI</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/jsonld-context.html">JSON-LD Contexts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/jsonld.html">JSON-LD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/rdf.html">RDF</a></li>
@@ -269,6 +270,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/sqltable.html">SQL DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/sqlalchemy.html">SQL Alchemy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/sqlvalidation.html">SQL Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../generators/bigquery.html">BigQuery DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/typedb.html">TypeDB / TypeQL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/linkml.html">LinkML Generators</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/prefixmap.html">Prefix Generator</a></li>
@@ -361,6 +363,8 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../maintainers/index.html">Maintainers Guide</a><input aria-label="Toggle navigation of Maintainers Guide" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/contributing.html">Contribution Guidelines</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/organization.html">GitHub Organization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../maintainers/contributor-hierarchy.html">Contributor Hierarchy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../maintainers/codeowners.html">CODEOWNERS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/deprecation.html">Deprecations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/code-of-conduct.html">Code of Conduct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../maintainers/generator-governance.html">Generator and Validator Governance</a></li>
@@ -408,7 +412,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">copy</span><span class="w"> </span><span class="kn">import</span> <span class="n">copy</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span><span class="p">,</span> <span class="n">unique</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">TypeAlias</span><span class="p">,</span> <span class="n">TypeVar</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">TypeAlias</span><span class="p">,</span> <span class="n">TypeVar</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">click</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">rdflib</span>
@@ -423,6 +427,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml.generators.common.subproperty</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_xsd_anyuri_range</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml.utils.deprecation</span><span class="w"> </span><span class="kn">import</span> <span class="n">deprecation_warning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml.utils.generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">Generator</span><span class="p">,</span> <span class="n">shared_arguments</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">linkml.utils.language_tags</span><span class="w"> </span><span class="kn">import</span> <span class="n">LanguageTagResolver</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml_runtime</span><span class="w"> </span><span class="kn">import</span> <span class="n">SchemaView</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml_runtime.linkml_model.meta</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">AnonymousClassExpression</span><span class="p">,</span>
@@ -612,7 +617,11 @@
 <span class="sd">    one direct ``is_a`` child, the generator adds</span>
 <span class="sd">    ``AbstractClass rdfs:subClassOf (Child1 or Child2 or …)``, expressing the open-world covering</span>
 <span class="sd">    constraint that every instance of the abstract class must also be an instance of one of its</span>
-<span class="sd">    direct subclasses.&quot;&quot;&quot;</span>
+<span class="sd">    direct subclasses.</span>
+
+<span class="sd">    .. note:: An info message is emitted when an abstract class has no children (no axiom generated).</span>
+<span class="sd">       A warning is emitted when there is only one child (covering axiom degenerates to equivalence</span>
+<span class="sd">       Parent ≡ Child).  Use this flag to suppress covering axioms entirely if equivalence is undesired.&quot;&quot;&quot;</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_present</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">_T</span> <span class="o">|</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">_T</span><span class="p">]:</span>
@@ -637,6 +646,49 @@
 <span class="sd">    - become ``owl:ObjectProperty`` (not ``owl:DatatypeProperty``)</span>
 <span class="sd">    - have no ``rdfs:range`` restriction (any IRI is valid)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">default_language</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Default BCP 47 language tag for human-readable string literals.</span>
+
+<span class="sd">    When set, ``rdfs:label``, ``rdfs:comment``, ``skos:definition``,</span>
+<span class="sd">    ``dcterms:title``, and other annotation literals are emitted with the</span>
+<span class="sd">    specified language tag (e.g. ``&quot;Person&quot;@en``).  An element-level</span>
+<span class="sd">    ``in_language`` value overrides this default for that element.</span>
+
+<span class="sd">    Technical literals (URIs, numeric constraints, XSD facets) are never</span>
+<span class="sd">    language-tagged.  Conforms to :rfc:`5646` (BCP 47).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Metaslot ranges that represent human-readable text (eligible for language tags).</span>
+    <span class="c1"># Everything else (uri, uriorcurie, datetime, boolean, integer, classes, enums, …)</span>
+    <span class="c1"># is technical and must never be language-tagged.</span>
+    <span class="n">_LANGUAGE_TAGGABLE_RANGES</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;ncname&quot;</span><span class="p">})</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Resolver must be assigned before ``super().__post_init__()`` so that</span>
+        <span class="c1"># any hook the parent invokes during initialisation can safely call</span>
+        <span class="c1"># ``_resolve_language``. The resolver also validates the default tag</span>
+        <span class="c1"># once here; per-element tags are validated lazily, with at most one</span>
+        <span class="c1"># warning per distinct malformed tag.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_language_resolver</span> <span class="o">=</span> <span class="n">LanguageTagResolver</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_language</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">__post_init__</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_language</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">element</span><span class="p">:</span> <span class="s2">&quot;Definition | PermissibleValue | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the BCP 47 language tag for *element*, or ``None``.</span>
+
+<span class="sd">        Delegates to :class:`linkml.utils.language_tags.LanguageTagResolver`.</span>
+<span class="sd">        Resolution order is element-level ``in_language`` first, then the</span>
+<span class="sd">        generator-level default.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_language_resolver</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">element</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_literal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">element</span><span class="p">:</span> <span class="s2">&quot;Definition | PermissibleValue | None&quot;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Literal</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a language-tagged ``Literal`` for a human-readable string.</span>
+
+<span class="sd">        If no language tag is resolved, falls back to a plain literal.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">lang</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_language</span><span class="p">(</span><span class="n">element</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">lang</span><span class="o">=</span><span class="n">lang</span><span class="p">)</span> <span class="k">if</span> <span class="n">lang</span> <span class="k">else</span> <span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">as_graph</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Graph</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -713,6 +765,8 @@
 <span class="sd">        Add annotation properties.</span>
 
 <span class="sd">        Set the profile attribute to the appropriate OWL profile.</span>
+<span class="sd">        Human-readable string literals are language-tagged when</span>
+<span class="sd">        ``default_language`` is set or the element has ``in_language``.</span>
 
 <span class="sd">        :param e: schema element</span>
 <span class="sd">        :param uri: URI representation of schema element</span>
@@ -722,6 +776,7 @@
         <span class="n">msv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metamodel_schemaview</span>
         <span class="n">this_sv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span>
         <span class="n">sn_mappings</span> <span class="o">=</span> <span class="n">msv</span><span class="o">.</span><span class="n">slot_name_mappings</span><span class="p">()</span>
+        <span class="n">lang</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_language</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
 
         <span class="c1"># iterate through all the assigned metamodel slots</span>
         <span class="k">for</span> <span class="n">metaslot_name</span><span class="p">,</span> <span class="n">metaslot_value</span> <span class="ow">in</span> <span class="nb">vars</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -746,6 +801,8 @@
                         <span class="n">obj</span> <span class="o">=</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
                     <span class="k">elif</span> <span class="n">metaslot_range</span> <span class="o">==</span> <span class="s2">&quot;uriorcurie&quot;</span><span class="p">:</span>
                         <span class="n">obj</span> <span class="o">=</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">this_sv</span><span class="o">.</span><span class="n">expand_curie</span><span class="p">(</span><span class="n">v</span><span class="p">))</span>
+                    <span class="k">elif</span> <span class="n">metaslot_range</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_LANGUAGE_TAGGABLE_RANGES</span> <span class="ow">and</span> <span class="n">lang</span><span class="p">:</span>
+                        <span class="n">obj</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">lang</span><span class="o">=</span><span class="n">lang</span><span class="p">)</span>
                     <span class="k">else</span><span class="p">:</span>
                         <span class="n">obj</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
                 <span class="k">elif</span> <span class="n">metaslot_range</span> <span class="ow">in</span> <span class="n">msv</span><span class="o">.</span><span class="n">all_subsets</span><span class="p">():</span>
@@ -757,6 +814,15 @@
                     <span class="c1"># else:</span>
                     <span class="c1">#    logger.debug(f&quot;Skipping {uri} {metaslot_uri} =&gt; {v}&quot;)</span>
                 <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Catch-all for ranges that are not types, subsets, or</span>
+                    <span class="c1"># classes -- in practice these are enum-ranged metaslots</span>
+                    <span class="c1"># such as ``pv_formula`` (range ``pv_formula_options``) on</span>
+                    <span class="c1"># a PermissibleValue or ``obligation_level`` (range</span>
+                    <span class="c1"># ``obligation_level_enum``) on a SlotDefinition. Their</span>
+                    <span class="c1"># values are permissible-value identifiers, i.e. constraint</span>
+                    <span class="c1"># data, not labels: tagging them would shift the datatype</span>
+                    <span class="c1"># from ``xsd:string`` to ``rdf:langString`` and break</span>
+                    <span class="c1"># downstream string equality / SHACL ``sh:in`` matching.</span>
                     <span class="n">obj</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">uri</span><span class="p">,</span> <span class="n">metaslot_uri</span><span class="p">,</span> <span class="n">obj</span><span class="p">))</span>
 
@@ -774,7 +840,11 @@
                 <span class="k">if</span> <span class="n">k_uri</span> <span class="o">==</span> <span class="n">k</span><span class="p">:</span>
                     <span class="n">k_uri</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">k_uri</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">uri</span><span class="p">,</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">k_uri</span><span class="p">),</span> <span class="n">Literal</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">value</span><span class="p">)))</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="n">obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_literal</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">obj</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">uri</span><span class="p">,</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">k_uri</span><span class="p">),</span> <span class="n">obj</span><span class="p">))</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">add_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">cls</span><span class="p">:</span> <span class="n">ClassDefinition</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -822,8 +892,14 @@
             <span class="c1"># If user selects add_root_classes, then all classes will be subclasses of LinkML:ClassDefinition</span>
             <span class="k">if</span> <span class="bp">cls</span><span class="o">.</span><span class="n">mixin</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">mixins_as_expressions</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">cls_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mixin_grouping_class_uri</span><span class="p">()))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_declare_grouping_class</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_mixin_grouping_class_uri</span><span class="p">(),</span>
+                    <span class="n">label</span><span class="o">=</span><span class="s2">&quot;mixin&quot;</span><span class="p">,</span>
+                    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Grouping class for LinkML mixins referenced via add_root_classes.&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">cls_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">,</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">ClassDefinition</span><span class="o">.</span><span class="n">class_class_uri</span><span class="p">)))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_declare_grouping_class</span><span class="p">(</span><span class="n">URIRef</span><span class="p">(</span><span class="n">ClassDefinition</span><span class="o">.</span><span class="n">class_class_uri</span><span class="p">),</span> <span class="n">ClassDefinition</span><span class="o">.</span><span class="n">class_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_profile</span><span class="p">(</span><span class="n">MetadataProfile</span><span class="o">.</span><span class="n">ols</span><span class="p">):</span>
             <span class="c1"># Add annotations for browser hints. See https://www.ebi.ac.uk/ols/docs/installation-guide</span>
             <span class="k">if</span> <span class="bp">cls</span><span class="o">.</span><span class="n">is_a</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -911,6 +987,26 @@
         <span class="c1"># must be an instance of at least one of its direct subclasses.</span>
         <span class="k">if</span> <span class="bp">cls</span><span class="o">.</span><span class="n">abstract</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_abstract_class_as_unionof_subclasses</span><span class="p">:</span>
             <span class="n">children</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">sv</span><span class="o">.</span><span class="n">class_children</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">imports</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">mergeimports</span><span class="p">,</span> <span class="n">mixins</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_a</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">children</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;Abstract class &#39;</span><span class="si">%s</span><span class="s2">&#39; has no children. No covering axiom will be generated.&quot;</span><span class="p">,</span>
+                    <span class="bp">cls</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">children</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="c1"># Warn: with one child C, the covering axiom degenerates to</span>
+                <span class="c1"># Parent ⊑ C which, combined with C ⊑ Parent (from is_a),</span>
+                <span class="c1"># creates Parent ≡ C (equivalence).  This is semantically</span>
+                <span class="c1"># correct per OWL 2 but may be surprising for extensible</span>
+                <span class="c1"># ontologies where more children are added later.</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Abstract class &#39;</span><span class="si">%s</span><span class="s2">&#39; has only 1 direct child (&#39;</span><span class="si">%s</span><span class="s2">&#39;). &quot;</span>
+                    <span class="s2">&quot;The covering axiom makes them equivalent (</span><span class="si">%s</span><span class="s2"> ≡ </span><span class="si">%s</span><span class="s2">). &quot;</span>
+                    <span class="s2">&quot;Use --skip-abstract-class-as-unionof-subclasses to suppress.&quot;</span><span class="p">,</span>
+                    <span class="bp">cls</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">children</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="bp">cls</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">children</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="p">)</span>
             <span class="k">if</span> <span class="n">children</span><span class="p">:</span>
                 <span class="n">child_uris</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_class_uri</span><span class="p">(</span><span class="n">child</span><span class="p">)</span> <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">children</span><span class="p">]</span>
                 <span class="n">union_node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_union_of</span><span class="p">(</span><span class="n">child_uris</span><span class="p">)</span>
@@ -1258,7 +1354,16 @@
         <span class="k">if</span> <span class="n">element</span><span class="o">.</span><span class="n">equals_string</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">equals_string</span> <span class="o">=</span> <span class="n">element</span><span class="o">.</span><span class="n">equals_string</span>
             <span class="k">if</span> <span class="n">is_literal</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ignoring equals_string=</span><span class="si">{</span><span class="n">equals_string</span><span class="si">}</span><span class="s2"> as unable to tell if literal&quot;</span><span class="p">)</span>
+                <span class="c1"># Enum-ranged slots sit between literals and URIs in OWL.</span>
+                <span class="c1"># Build a proper &quot;owl:oneOf&quot; datatype so that rules like</span>
+                <span class="c1"># `none_of: [{equals_string: &quot;X&quot;}]` produce a valid</span>
+                <span class="c1"># owl:datatypeComplementOf instead of being silently dropped.</span>
+                <span class="n">one_of_expr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_boolean_expression</span><span class="p">(</span>
+                    <span class="p">[</span><span class="n">Literal</span><span class="p">(</span><span class="n">equals_string</span><span class="p">)],</span> <span class="n">OWL</span><span class="o">.</span><span class="n">oneOf</span><span class="p">,</span> <span class="n">node</span><span class="o">=</span><span class="n">BNode</span><span class="p">(),</span> <span class="n">owl_types</span><span class="o">=</span><span class="p">{</span><span class="n">RDFS</span><span class="o">.</span><span class="n">Literal</span><span class="p">}</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">one_of_expr</span><span class="p">:</span>
+                    <span class="n">owl_exprs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">one_of_expr</span><span class="p">)</span>
+                    <span class="n">owl_types</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">RDFS</span><span class="o">.</span><span class="n">Literal</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">is_literal</span><span class="p">:</span>
                 <span class="n">constraints</span><span class="p">[</span><span class="n">XSD</span><span class="o">.</span><span class="n">pattern</span><span class="p">]</span> <span class="o">=</span> <span class="n">equals_string</span>
             <span class="k">else</span><span class="p">:</span>
@@ -1453,6 +1558,7 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">enum_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_enum_uri</span><span class="p">(</span><span class="n">parent_name</span><span class="p">)))</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">has_parent</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_root_classes</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">enum_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">,</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">EnumDefinition</span><span class="o">.</span><span class="n">class_class_uri</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_declare_grouping_class</span><span class="p">(</span><span class="n">URIRef</span><span class="p">(</span><span class="n">EnumDefinition</span><span class="o">.</span><span class="n">class_class_uri</span><span class="p">),</span> <span class="n">EnumDefinition</span><span class="o">.</span><span class="n">class_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metaclasses</span><span class="p">:</span>
             <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">(</span>
                 <span class="p">(</span>
@@ -1485,7 +1591,7 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pv_node</span><span class="p">,</span> <span class="n">Literal</span><span class="p">):</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">add_metadata</span><span class="p">(</span><span class="n">pv</span><span class="p">,</span> <span class="n">pv_node</span><span class="p">)</span>
                 <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">pv_node</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">pv_owl_type</span><span class="p">))</span>
-                <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">pv_node</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">text</span><span class="p">)))</span>
+                <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">pv_node</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_literal</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">text</span><span class="p">,</span> <span class="n">pv</span><span class="p">)))</span>
                 <span class="c1"># TODO: make this configurable</span>
                 <span class="c1"># self._add_element_properties(pv_uri, pv)</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metaclasses</span><span class="p">:</span>
@@ -1503,6 +1609,7 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">enum_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">,</span> <span class="n">parent</span><span class="p">))</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">has_parent</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_root_classes</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">pv_node</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">,</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">PermissibleValue</span><span class="o">.</span><span class="n">class_class_uri</span><span class="p">)))</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_declare_grouping_class</span><span class="p">(</span><span class="n">URIRef</span><span class="p">(</span><span class="n">PermissibleValue</span><span class="o">.</span><span class="n">class_class_uri</span><span class="p">),</span> <span class="n">PermissibleValue</span><span class="o">.</span><span class="n">class_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">all</span><span class="p">([</span><span class="n">pv</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">pv</span> <span class="ow">in</span> <span class="n">pv_uris</span><span class="p">]):</span>
             <span class="c1"># every single PV in the enum is not-null</span>
             <span class="n">all_is_class</span> <span class="o">=</span> <span class="nb">all</span><span class="p">([</span><span class="n">owl_type</span> <span class="o">==</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span> <span class="k">for</span> <span class="n">owl_type</span> <span class="ow">in</span> <span class="n">owl_types</span><span class="p">])</span>
@@ -1733,6 +1840,7 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">OWL_EXPRESSION</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">expr_list</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">OWL_EXPRESSION</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_present</span><span class="p">(</span><span class="n">exprs</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">expr_list</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;All operands in complement expression resolved to None; skipping&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="n">neg_expr</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">owl_types</span><span class="p">:</span>
@@ -1801,7 +1909,9 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Null expr in: </span><span class="si">{</span><span class="n">exprs</span><span class="si">}</span><span class="s2"> for </span><span class="si">{</span><span class="n">predicate</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expr_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expr_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expr_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">predicate</span> <span class="o">!=</span> <span class="n">OWL</span><span class="o">.</span><span class="n">oneOf</span><span class="p">:</span>
+            <span class="c1"># owl:oneOf always requires a list structure (even for one member), so</span>
+            <span class="c1"># we do not stop it here.</span>
             <span class="k">return</span> <span class="n">expr_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">node</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">node</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
@@ -1838,6 +1948,43 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_mixin_grouping_class_uri</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">URIRef</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">ClassDefinition</span><span class="o">.</span><span class="n">class_class_uri</span> <span class="o">+</span> <span class="s2">&quot;#Mixin&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_declare_grouping_class</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">uri</span><span class="p">:</span> <span class="n">URIRef</span><span class="p">,</span>
+        <span class="n">metamodel_class_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Declare a metamodel grouping class referenced by ``add_root_classes`` as an ``owl:Class``.</span>
+
+<span class="sd">        When ``add_root_classes`` is set, schema elements are made ``rdfs:subClassOf`` metamodel</span>
+<span class="sd">        classes such as ``linkml:EnumDefinition``. Those parent classes were referenced but never</span>
+<span class="sd">        declared, so RDF-only consumers (for example OLS) treat the parent as a dangling reference</span>
+<span class="sd">        and drop the grouping from the class hierarchy. This emits a minimal ``owl:Class``</span>
+<span class="sd">        declaration with an ``rdfs:label`` and ``skos:definition`` sourced from the metamodel,</span>
+<span class="sd">        making the grouping renderable without a reasoning step. Idempotent.</span>
+
+<span class="sd">        :param uri: URI of the grouping class to declare</span>
+<span class="sd">        :param metamodel_class_name: name of the metamodel class to source label/definition from</span>
+<span class="sd">        :param label: explicit label, used when the URI has no corresponding metamodel class</span>
+<span class="sd">        :param description: explicit definition, used as a fallback</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">uri</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">uri</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">metamodel_class_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">meta_class</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metamodel_schemaview</span><span class="o">.</span><span class="n">get_class</span><span class="p">(</span><span class="n">metamodel_class_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">meta_class</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Prefer a metamodel title; otherwise use the UpperCamelCase form of the</span>
+                <span class="c1"># metamodel name (matching the class IRI local name and the LinkML model</span>
+                <span class="c1"># docs, e.g. &quot;EnumDefinition&quot;), not the raw snake_case name.</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="n">meta_class</span><span class="o">.</span><span class="n">title</span> <span class="ow">or</span> <span class="n">camelcase</span><span class="p">(</span><span class="n">meta_class</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="ow">or</span> <span class="n">label</span>
+                <span class="n">description</span> <span class="o">=</span> <span class="n">meta_class</span><span class="o">.</span><span class="n">description</span> <span class="ow">or</span> <span class="n">description</span>
+        <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">label</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="n">description</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">uri</span><span class="p">,</span> <span class="n">SKOS</span><span class="o">.</span><span class="n">definition</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">description</span><span class="p">)))</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_class_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cn</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">ClassDefinitionName</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">URIRef</span><span class="p">:</span>
         <span class="n">c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_class</span><span class="p">(</span><span class="n">cn</span><span class="p">)</span>
@@ -1877,14 +2024,6 @@
         <span class="k">if</span> <span class="n">native</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="c1"># never use native unless type shadowing with objects is enabled</span>
             <span class="n">native</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">type_objects</span>
-        <span class="k">if</span> <span class="n">native</span><span class="p">:</span>
-            <span class="c1"># UGLY HACK: Currently schemaview does not camelcase types</span>
-            <span class="n">e</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_element</span><span class="p">(</span><span class="n">tn</span><span class="p">,</span> <span class="n">imports</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">from_schema</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">schema</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">sc</span> <span class="k">for</span> <span class="n">sc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">schema_map</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">if</span> <span class="n">sc</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">e</span><span class="o">.</span><span class="n">from_schema</span><span class="p">)</span>
-                <span class="n">pfx</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">default_prefix</span>
-                <span class="k">if</span> <span class="n">pfx</span> <span class="o">==</span> <span class="s2">&quot;linkml&quot;</span><span class="p">:</span>
-                    <span class="k">return</span> <span class="n">URIRef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">expand_curie</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pfx</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">camelcase</span><span class="p">(</span><span class="n">tn</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
         <span class="n">t</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_type</span><span class="p">(</span><span class="n">tn</span><span class="p">)</span>
         <span class="n">expanded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_uri</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">native</span><span class="o">=</span><span class="n">native</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">expanded</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;xsd:&quot;</span><span class="p">):</span>
@@ -2061,7 +2200,9 @@
     <span class="n">show_default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="n">help</span><span class="o">=</span><span class="p">(</span>
         <span class="s2">&quot;If true, suppress rdfs:subClassOf owl:unionOf(subclasses) covering axioms for abstract classes. &quot;</span>
-        <span class="s2">&quot;By default such axioms are emitted for every abstract class that has direct is_a children.&quot;</span>
+        <span class="s2">&quot;By default such axioms are emitted for every abstract class that has direct is_a children. &quot;</span>
+        <span class="s2">&quot;Note: an info message is logged for abstract classes with zero children (no axiom); &quot;</span>
+        <span class="s2">&quot;a warning is emitted for one child (equivalence).&quot;</span>
     <span class="p">),</span>
 <span class="p">)</span>
 <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
@@ -2073,6 +2214,17 @@
         <span class="s2">&quot;instead of owl:DatatypeProperty with rdfs:range xsd:anyURI (literal). &quot;</span>
         <span class="s2">&quot;Aligns OWL output with the SHACL generator (sh:nodeKind sh:IRI) and &quot;</span>
         <span class="s2">&quot;the JSON-LD context generator (--xsd-anyuri-as-iri → @type: @id).&quot;</span>
+    <span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
+    <span class="s2">&quot;--default-language&quot;</span><span class="p">,</span>
+    <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">show_default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">help</span><span class="o">=</span><span class="p">(</span>
+        <span class="s2">&quot;Default BCP 47 language tag for human-readable string literals &quot;</span>
+        <span class="s2">&quot;(e.g. en, de, zh-Hans).  When set, rdfs:label, rdfs:comment, &quot;</span>
+        <span class="s2">&quot;skos:definition and other text annotations are emitted with the &quot;</span>
+        <span class="s2">&quot;specified language tag.  Element-level in_language overrides this.&quot;</span>
     <span class="p">),</span>
 <span class="p">)</span>
 <span class="nd">@click</span><span class="o">.</span><span class="n">version_option</span><span class="p">(</span><span class="n">__version__</span><span class="p">,</span> <span class="s2">&quot;-V&quot;</span><span class="p">,</span> <span class="s2">&quot;--version&quot;</span><span class="p">)</span>

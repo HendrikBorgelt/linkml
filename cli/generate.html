@@ -250,6 +250,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../generators/json-schema.html">JSON Schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/protobuf.html">ProtoBuf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/graphql.html">GraphQL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/openapi.html">OpenAPI</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/jsonld-context.html">JSON-LD Contexts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/jsonld.html">JSON-LD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/rdf.html">RDF</a></li>
@@ -270,6 +271,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqltable.html">SQL DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqlalchemy.html">SQL Alchemy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqlvalidation.html">SQL Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/bigquery.html">BigQuery DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/typedb.html">TypeDB / TypeQL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/linkml.html">LinkML Generators</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/prefixmap.html">Prefix Generator</a></li>
@@ -362,6 +364,8 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="../maintainers/index.html">Maintainers Guide</a><input aria-label="Toggle navigation of Maintainers Guide" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/contributing.html">Contribution Guidelines</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/organization.html">GitHub Organization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../maintainers/contributor-hierarchy.html">Contributor Hierarchy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../maintainers/codeowners.html">CODEOWNERS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/deprecation.html">Deprecations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/code-of-conduct.html">Code of Conduct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/generator-governance.html">Generator and Validator Governance</a></li>
@@ -2919,7 +2923,9 @@ YAML, and including it when necessary but not by default (e.g. in documentation 
 </section>
 <section id="linkml-generate-full-openapi">
 <h4>openapi<a class="headerlink" href="#linkml-generate-full-openapi" title="Link to this heading">¶</a></h4>
-<p>Generate an OpenAPI v3.0.3 spec with resources modelled with LinkML</p>
+<p>Generate an OpenAPI v3.0.3 spec with resources modelled with LinkML.
+If no OpenAPI template is provided,
+a generic one with placeholders for all the classes in the schema is printed out.</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>linkml<span class="w"> </span>generate<span class="w"> </span><span class="o">(</span>full<span class="o">)</span><span class="w"> </span>openapi<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>YAMLFILE
 </pre></div>
 </div>
@@ -2927,7 +2933,7 @@ YAML, and including it when necessary but not by default (e.g. in documentation 
 <dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-linkml-generate-full-openapi-t">
 <span id="cmdoption-linkml-generate-full-openapi-template"></span><span class="sig-name descname"><span class="pre">-t</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--template</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;template&gt;</span></span><a class="headerlink" href="#cmdoption-linkml-generate-full-openapi-t" title="Link to this definition">¶</a></dt>
-<dd><p>OpenAPI v3.0.3 template - includes the header, the endpoints and the securityschemes</p>
+<dd><p>OpenAPI v3.0.3 template - includes the header, the endpoints and the security schemes</p>
 </dd></dl>
 
 <dl class="std option">
@@ -3202,7 +3208,7 @@ to include metaclasses. To restore this behavior:</p>
 <dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-linkml-generate-full-owl-skip-abstract-class-as-unionof-subclasses">
 <span id="cmdoption-linkml-generate-full-owl-no-skip-abstract-class-as-unionof-subclasses"></span><span class="sig-name descname"><span class="pre">--skip-abstract-class-as-unionof-subclasses</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--no-skip-abstract-class-as-unionof-subclasses</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-linkml-generate-full-owl-skip-abstract-class-as-unionof-subclasses" title="Link to this definition">¶</a></dt>
-<dd><p>If true, suppress rdfs:subClassOf owl:unionOf(subclasses) covering axioms for abstract classes. By default such axioms are emitted for every abstract class that has direct is_a children.</p>
+<dd><p>If true, suppress rdfs:subClassOf owl:unionOf(subclasses) covering axioms for abstract classes. By default such axioms are emitted for every abstract class that has direct is_a children. Note: an info message is logged for abstract classes with zero children (no axiom); a warning is emitted for one child (equivalence).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Default<span class="colon">:</span></dt>
 <dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p>
@@ -3219,6 +3225,12 @@ to include metaclasses. To restore this behavior:</p>
 <dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-linkml-generate-full-owl-default-language">
+<span class="sig-name descname"><span class="pre">--default-language</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;default_language&gt;</span></span><a class="headerlink" href="#cmdoption-linkml-generate-full-owl-default-language" title="Link to this definition">¶</a></dt>
+<dd><p>Default BCP 47 language tag for human-readable string literals (e.g. en, de, zh-Hans).  When set, rdfs:label, rdfs:comment, skos:definition and other text annotations are emitted with the specified language tag.  Element-level in_language overrides this.</p>
 </dd></dl>
 
 <dl class="std option">
@@ -4430,6 +4442,18 @@ if an override is not found</p>
 </dd></dl>
 
 <dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-linkml-generate-full-shacl-default-language">
+<span class="sig-name descname"><span class="pre">--default-language</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;default_language&gt;</span></span><a class="headerlink" href="#cmdoption-linkml-generate-full-shacl-default-language" title="Link to this definition">¶</a></dt>
+<dd><p>Default BCP 47 language tag for human-readable string literals (e.g. en, de, zh-Hans).  When set, sh:name, sh:description, rdfs:label and rdfs:comment are emitted with the specified language tag.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-linkml-generate-full-shacl-message-template">
+<span class="sig-name descname"><span class="pre">--message-template</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;message_template&gt;</span></span><a class="headerlink" href="#cmdoption-linkml-generate-full-shacl-message-template" title="Link to this definition">¶</a></dt>
+<dd><p>Template string for sh:message on each property shape. Placeholders: {name} (slot name), {title} (slot title or name), {description} (slot description), {comments} (slot comments joined with ‘; ‘), {class} (class name), {path} (fully-expanded property IRI). Example: “{name} ({class}): {description} [{comments}]”</p>
+</dd></dl>
+
+<dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-linkml-generate-full-shacl-V">
 <span id="cmdoption-linkml-generate-full-shacl-version"></span><span class="sig-name descname"><span class="pre">-V</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--version</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-linkml-generate-full-shacl-V" title="Link to this definition">¶</a></dt>
 <dd><p>Show the version and exit.</p>
@@ -4986,6 +5010,17 @@ is conformant to the same LinkML schema.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Default<span class="colon">:</span></dt>
 <dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-linkml-generate-full-sqltables-rename-foreign-keys">
+<span id="cmdoption-linkml-generate-full-sqltables-no-rename-foreign-keys"></span><span class="sig-name descname"><span class="pre">--rename-foreign-keys</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--no-rename-foreign-keys</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-linkml-generate-full-sqltables-rename-foreign-keys" title="Link to this definition">¶</a></dt>
+<dd><p>Rename every class-range slot to &lt;slot&gt;_&lt;target_pk&gt; in the emitted DDL so column names match SQLAlchemy 2.x declarative ORM output (gen-sqlalchemy –template declarative_2x).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Default<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 </dl>
 </dd></dl>

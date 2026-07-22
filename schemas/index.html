@@ -250,6 +250,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../generators/json-schema.html">JSON Schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/protobuf.html">ProtoBuf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/graphql.html">GraphQL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/openapi.html">OpenAPI</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/jsonld-context.html">JSON-LD Contexts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/jsonld.html">JSON-LD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/rdf.html">RDF</a></li>
@@ -270,6 +271,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqltable.html">SQL DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqlalchemy.html">SQL Alchemy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqlvalidation.html">SQL Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/bigquery.html">BigQuery DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/typedb.html">TypeDB / TypeQL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/linkml.html">LinkML Generators</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/prefixmap.html">Prefix Generator</a></li>
@@ -362,6 +364,8 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="../maintainers/index.html">Maintainers Guide</a><input aria-label="Toggle navigation of Maintainers Guide" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/contributing.html">Contribution Guidelines</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/organization.html">GitHub Organization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../maintainers/contributor-hierarchy.html">Contributor Hierarchy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../maintainers/codeowners.html">CODEOWNERS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/deprecation.html">Deprecations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/code-of-conduct.html">Code of Conduct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/generator-governance.html">Generator and Validator Governance</a></li>
@@ -445,7 +449,7 @@ use the guide below.</p>
 <li class="toctree-l1"><a class="reference internal" href="slots.html">Slots</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="slots.html#ranges">ranges</a></li>
 <li class="toctree-l2"><a class="reference internal" href="slots.html#slot-usage">slot_usage</a></li>
-<li class="toctree-l2"><a class="reference internal" href="slots.html#identifiers">Identifiers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="slots.html#keys-identifiers">Keys &amp; Identifiers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="slots.html#type-designator">Type designator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="slots.html#cardinality">Cardinality</a></li>
 <li class="toctree-l2"><a class="reference internal" href="slots.html#inverse">inverse</a></li>
@@ -492,7 +496,7 @@ use the guide below.</p>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="constraints.html">Adding constraints and rules</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="constraints.html#unique-key">Unique Key</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constraints.html#unique-keys">Unique Keys</a></li>
 <li class="toctree-l2"><a class="reference internal" href="constraints.html#string-serialization">String serialization</a></li>
 <li class="toctree-l2"><a class="reference internal" href="constraints.html#patterns">Patterns</a></li>
 <li class="toctree-l2"><a class="reference internal" href="constraints.html#structured-patterns">Structured patterns</a></li>

@@ -250,6 +250,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../generators/json-schema.html">JSON Schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/protobuf.html">ProtoBuf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/graphql.html">GraphQL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/openapi.html">OpenAPI</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/jsonld-context.html">JSON-LD Contexts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/jsonld.html">JSON-LD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/rdf.html">RDF</a></li>
@@ -270,6 +271,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqltable.html">SQL DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqlalchemy.html">SQL Alchemy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqlvalidation.html">SQL Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/bigquery.html">BigQuery DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/typedb.html">TypeDB / TypeQL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/linkml.html">LinkML Generators</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/prefixmap.html">Prefix Generator</a></li>
@@ -362,6 +364,8 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="../maintainers/index.html">Maintainers Guide</a><input aria-label="Toggle navigation of Maintainers Guide" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/contributing.html">Contribution Guidelines</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/organization.html">GitHub Organization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../maintainers/contributor-hierarchy.html">Contributor Hierarchy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../maintainers/codeowners.html">CODEOWNERS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/deprecation.html">Deprecations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/code-of-conduct.html">Code of Conduct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../maintainers/generator-governance.html">Generator and Validator Governance</a></li>
@@ -480,7 +484,8 @@
 <h2>Inlining as a dictionary<a class="headerlink" href="#inlining-as-a-dictionary" title="Link to this heading">¶</a></h2>
 <p>To force inlining as a dictionary, set <a class="reference external" href="https://w3id.org/linkml/inlined_as_list">inlined_as_list</a> to <code class="docutils literal notranslate"><span class="pre">false</span></code></p>
 <p>This is a slight variant on inlining as a list - here a dictionary keyed by identifier is provided</p>
-<p><strong>Note</strong> this is only possible if the range of the slot is a class that has an identifier slot</p>
+<p><strong>Note</strong> this is only possible if the range of the slot is a class that has a <a class="reference internal" href="constraints.html#singular-keys"><span class="std std-ref">singular key</span></a>
+(either a <a class="reference external" href="https://w3id.org/linkml/key">key slot</a> or an <a class="reference external" href="https://w3id.org/linkml/identifier">identifier slot</a>).</p>
 <p>schema:</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="w">      </span><span class="nt">has_subtypes</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">range</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Organism</span>
@@ -564,10 +569,11 @@ a key (the prefix itself, e.g. <code class="docutils literal notranslate"><span 
 <p>The procedure for determining whether a SimpleDict serialization can be used
 on a collection of classes is as follows:</p>
 <ol class="arabic simple">
-<li><p>There must be a key or identifier slot (this is true for all slots inlined as dict)</p></li>
+<li><p>There must be a <a class="reference internal" href="constraints.html#singular-keys"><span class="std std-ref">singular key</span></a> (either a key slot or an identifier slot; this is true for all
+slots inlined as dict)</p></li>
 <li><p>One of the following must hold of the set of remaining slots:</p>
 <ul class="simple">
-<li><p>There is exactly one additional non-key slot (this forms the “primary” value)</p></li>
+<li><p>There is exactly one additional slot beyond the singular key slot (this forms the “primary” value)</p></li>
 <li><p>If there are multiple candidates for the primary value, if exactly one is <code class="docutils literal notranslate"><span class="pre">required</span></code>, it is used.</p></li>
 </ul>
 </li>

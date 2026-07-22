@@ -250,6 +250,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../generators/json-schema.html">JSON Schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/protobuf.html">ProtoBuf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/graphql.html">GraphQL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/openapi.html">OpenAPI</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/jsonld-context.html">JSON-LD Contexts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/jsonld.html">JSON-LD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/rdf.html">RDF</a></li>
@@ -270,6 +271,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqltable.html">SQL DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqlalchemy.html">SQL Alchemy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/sqlvalidation.html">SQL Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../generators/bigquery.html">BigQuery DDL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/typedb.html">TypeDB / TypeQL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/linkml.html">LinkML Generators</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../generators/prefixmap.html">Prefix Generator</a></li>
@@ -362,6 +364,8 @@
 <li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Maintainers Guide</a><input aria-label="Toggle navigation of Maintainers Guide" checked="" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Contribution Guidelines</a></li>
 <li class="toctree-l2"><a class="reference internal" href="organization.html">GitHub Organization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributor-hierarchy.html">Contributor Hierarchy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="codeowners.html">CODEOWNERS</a></li>
 <li class="toctree-l2"><a class="reference internal" href="deprecation.html">Deprecations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="code-of-conduct.html">Code of Conduct</a></li>
 <li class="toctree-l2"><a class="reference internal" href="generator-governance.html">Generator and Validator Governance</a></li>
@@ -562,7 +566,7 @@ in which case you may need to use <code class="docutils literal notranslate"><sp
 </section>
 <section id="code-formatting-and-linting">
 <h2>Code formatting and linting<a class="headerlink" href="#code-formatting-and-linting" title="Link to this heading">¶</a></h2>
-<p>This repository is configured to use <a class="reference external" href="https://beta.ruff.rs/docs/">Ruff</a> to ensure good formatting and code quality standards.</p>
+<p>This repository is configured to use <a class="reference external" href="https://docs.astral.sh/ruff/">Ruff</a> to ensure good formatting and code quality standards.</p>
 <p>Each of these tools can be run on-demand via <code class="docutils literal notranslate"><span class="pre">tox</span></code>. To check the code for issues run:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>run<span class="w"> </span>tox<span class="w"> </span>-e<span class="w"> </span>lint
 </pre></div>
@@ -596,14 +600,15 @@ in which case you may need to use <code class="docutils literal notranslate"><sp
 <h3>PRs<a class="headerlink" href="#prs" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>PRs MUST be in a DRAFT state until they are ready for review and tests are passing. Draft PRs minimize notification noise for maintainers—GitHub sends notifications on PR creation and each automated review, which can overwhelm those subscribed to “All Activity.”</p></li>
-<li><p>PRs MUST be reviewed by at least one member of the <a class="reference external" href="https://github.com/orgs/linkml/teams/developers">LinkML developer team</a>.</p>
+<li><p>PRs MUST be approved by at least one member of the <a class="reference external" href="https://github.com/orgs/linkml/teams/core-team">LinkML core team</a> or a CODEOWNER from the <a class="reference external" href="https://github.com/orgs/linkml/teams/developers-collaborators">developers-collaborators team</a>.</p></li>
+<li><p>PRs MUST be merged by a member of the <a class="reference external" href="https://github.com/orgs/linkml/teams/core-team">LinkML core team</a> or a CODEOWNER from the <a class="reference external" href="https://github.com/orgs/linkml/teams/developers-collaborators">developers-collaborators team</a>.</p>
 <ul>
 <li><p>All automated tests should be passing via GitHub actions before a code review is requested.</p></li>
-<li><p>Reviews can be requested of any member of <a class="reference external" href="https://github.com/orgs/linkml/teams/developers">the LinkML developer team</a>.</p></li>
+<li><p>Reviews can be requested of any member of the <a class="reference external" href="https://github.com/orgs/linkml/teams/core-team">core team</a> or the <a class="reference external" href="https://github.com/orgs/linkml/teams/developers-collaborators">developers-collaborators team</a>.</p></li>
 </ul>
 </li>
 <li><p>PRs SHOULD be linked to at least one issue in on the <a class="reference external" href="https://github.com/linkml/linkml/issues/">LinkML issue tracker</a>. This ensures that the community is aware of the work before it has started, understands its motivation and is able to respond before the work is performed. This also helps with process management and progress reporting. CODEOWNERs may choose to ignore this recommendation - the assumption being that this responsibility can add unnecessary busy work if larger tasks are broken into multiple small PRs.</p></li>
-<li><p>All <em>open</em> PRs MUST be assigned to someone to be reviewed / processed by the core team. This assignment means: the author (and no one else) is responsible for seeing this PR through. This is a critical component of a scalable Open Data effort - do not abandon your PRs hoping someone will finish them / deal with them. The <a class="reference external" href="https://github.com/orgs/linkml/teams/developers">LinkML developer team</a> will do its best to find reviewers for your work, but a nudge from time to time helps with prioritisation. If you want you be assigned to your own PR but are not in the system, we will add you to the respective GitHub team. If you want someone else to be assigned to your PR, please clearly say so in the PR description. If a PR author withdraws themselves from a PR (by unassigning themselves), the PR is considered <em>orphaned</em>. <em>orphaned</em> PRs are reverted to <em>draft</em> state and stay open for up to 3 months for possible adoption before being closed automatically.</p></li>
+<li><p>All <em>open</em> PRs MUST be assigned to someone to be reviewed / processed by the core team. This assignment means: the author (and no one else) is responsible for seeing this PR through. This is a critical component of a scalable Open Data effort - do not abandon your PRs hoping someone will finish them / deal with them. The <a class="reference external" href="https://github.com/orgs/linkml/teams/core-team">LinkML core team</a> will do its best to find reviewers for your work, but a nudge from time to time helps with prioritisation. If you want you be assigned to your own PR but are not in the system, we will add you to the respective GitHub team. If you want someone else to be assigned to your PR, please clearly say so in the PR description. If a PR author withdraws themselves from a PR (by unassigning themselves), the PR is considered <em>orphaned</em>. <em>orphaned</em> PRs are reverted to <em>draft</em> state and stay open for up to 3 months for possible adoption before being closed automatically.</p></li>
 </ul>
 <p>Optional:</p>
 <ul class="simple">
