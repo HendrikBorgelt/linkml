@@ -5,11 +5,11 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
         <link rel="prefetch" href="https://linkml.io/uploads/linkml-logo_color.png" as="image">
 
-    <link rel="shortcut icon" href="https://linkml.io/uploads/linkml-logo_color-no-words.png"><!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <link rel="shortcut icon" href="https://linkml.io/uploads/linkml-logo_color-no-words.png"><!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
         <title>linkml.generators.javagen - linkml documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
     <link rel="stylesheet" type="text/css" href="../../../_static/plot_directive.css" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -265,6 +265,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/python.html">Python</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/pydantic.html">Pydantic</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/java.html">Java</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../generators/golang.html">Go</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/typescript.html">Typescript</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/rust.html">Rust</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../generators/sqltable.html">SQL DDL</a></li>
@@ -313,6 +314,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../get-involved/Community-Meetings.html">Community Meetings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../get-involved/workshops-and-presentations.html">Workshops and Presentations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../get-involved/office-hours.html">Monthly LinkML Office Hours</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../get-involved/symposium-2026.html">Virtual LinkML Symposium 2026</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../faq/index.html">FAQ</a><input aria-label="Toggle navigation of FAQ" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
@@ -331,6 +333,7 @@
 <ul>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../cli/index.html">CLI</a><input aria-label="Toggle navigation of CLI" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../cli/linkml.html"><code class="docutils literal notranslate"><span class="pre">linkml</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../cli/config.html"><code class="docutils literal notranslate"><span class="pre">linkml</span> <span class="pre">config</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../cli/generate.html"><code class="docutils literal notranslate"><span class="pre">linkml</span> <span class="pre">generate</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../cli/lint.html"><code class="docutils literal notranslate"><span class="pre">linkml</span> <span class="pre">lint</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../cli/validate.html"><code class="docutils literal notranslate"><span class="pre">linkml</span> <span class="pre">validate</span></code></a></li>
@@ -357,6 +360,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../code/deprecation.html">Deprecation Log</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../../../config/index.html">Configuration</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Maintainers Guide:</span></p>
 <ul>
@@ -405,8 +409,10 @@
           <h1>Source code for linkml.generators.javagen</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapping</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">click</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">jinja2</span><span class="w"> </span><span class="kn">import</span> <span class="n">Template</span>
@@ -414,9 +420,12 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml._version</span><span class="w"> </span><span class="kn">import</span> <span class="n">__version__</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml.generators.oocodegen</span><span class="w"> </span><span class="kn">import</span> <span class="n">OOCodeGenerator</span><span class="p">,</span> <span class="n">OODocument</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml.utils.deprecation</span><span class="w"> </span><span class="kn">import</span> <span class="n">deprecated_fields</span><span class="p">,</span> <span class="n">deprecation_warning</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">linkml.utils.generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">shared_arguments</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">linkml.utils.generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_config_defaults</span><span class="p">,</span> <span class="n">read_generator_config</span><span class="p">,</span> <span class="n">shared_arguments</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">linkml_runtime</span><span class="w"> </span><span class="kn">import</span> <span class="n">SchemaView</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml_runtime.linkml_model.meta</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassDefinition</span><span class="p">,</span> <span class="n">SlotDefinition</span><span class="p">,</span> <span class="n">TypeDefinition</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">linkml_runtime.utils.formatutils</span><span class="w"> </span><span class="kn">import</span> <span class="n">camelcase</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">DEFAULT_TEMPLATE_DIR</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span> <span class="o">/</span> <span class="s2">&quot;javagen&quot;</span>
 
@@ -451,6 +460,7 @@
     <span class="s2">&quot;else&quot;</span><span class="p">,</span>
     <span class="s2">&quot;enum&quot;</span><span class="p">,</span>
     <span class="s2">&quot;extends&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;false&quot;</span><span class="p">,</span>
     <span class="s2">&quot;final&quot;</span><span class="p">,</span>
     <span class="s2">&quot;finally&quot;</span><span class="p">,</span>
     <span class="s2">&quot;float&quot;</span><span class="p">,</span>
@@ -465,6 +475,7 @@
     <span class="s2">&quot;long&quot;</span><span class="p">,</span>
     <span class="s2">&quot;native&quot;</span><span class="p">,</span>
     <span class="s2">&quot;new&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
     <span class="s2">&quot;package&quot;</span><span class="p">,</span>
     <span class="s2">&quot;private&quot;</span><span class="p">,</span>
     <span class="s2">&quot;protected&quot;</span><span class="p">,</span>
@@ -480,6 +491,7 @@
     <span class="s2">&quot;throw&quot;</span><span class="p">,</span>
     <span class="s2">&quot;throws&quot;</span><span class="p">,</span>
     <span class="s2">&quot;transient&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;true&quot;</span><span class="p">,</span>
     <span class="s2">&quot;try&quot;</span><span class="p">,</span>
     <span class="s2">&quot;void&quot;</span><span class="p">,</span>
     <span class="s2">&quot;volatile&quot;</span><span class="p">,</span>
@@ -487,6 +499,23 @@
 <span class="p">]</span>
 
 <span class="n">TYPE_DEFAULTS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;boolean&quot;</span><span class="p">:</span> <span class="s2">&quot;false&quot;</span><span class="p">,</span> <span class="s2">&quot;int&quot;</span><span class="p">:</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span> <span class="s2">&quot;float&quot;</span><span class="p">:</span> <span class="s2">&quot;0f&quot;</span><span class="p">,</span> <span class="s2">&quot;double&quot;</span><span class="p">:</span> <span class="s2">&quot;0d&quot;</span><span class="p">,</span> <span class="s2">&quot;String&quot;</span><span class="p">:</span> <span class="s1">&#39;&quot;&quot;&#39;</span><span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_valid_java_package</span><span class="p">(</span><span class="n">package_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True if ``package_name`` is a dot-separated list of legal Java identifiers.</span>
+
+<span class="sd">    Each name segment must be a valid Java identifier (letter/underscore/dollar start,</span>
+<span class="sd">    followed by letters/digits/underscore/dollar) and not a reserved keyword.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">segments</span> <span class="o">=</span> <span class="n">package_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">segments</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">segment</span> <span class="ow">or</span> <span class="ow">not</span> <span class="p">(</span><span class="n">segment</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isalpha</span><span class="p">()</span> <span class="ow">or</span> <span class="n">segment</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="s2">&quot;_$&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="ow">not</span> <span class="p">(</span><span class="n">ch</span><span class="o">.</span><span class="n">isalnum</span><span class="p">()</span> <span class="ow">or</span> <span class="n">ch</span> <span class="ow">in</span> <span class="s2">&quot;_$&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">segment</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">JAVA_KEYWORDS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
 
 
 <span class="nd">@dataclass</span>
@@ -540,14 +569,14 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">template_files</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">files</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">templates</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">Template</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">add_directory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Adds all templates in the specified directory to the cache.&quot;&quot;&quot;</span>
 
-        <span class="k">for</span> <span class="n">template</span> <span class="ow">in</span> <span class="n">template_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.jinja2&quot;</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">template_files</span><span class="p">[</span><span class="n">template</span><span class="o">.</span><span class="n">stem</span><span class="p">]</span> <span class="o">=</span> <span class="n">template</span>
+        <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">template_dir</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">f</span><span class="o">.</span><span class="n">is_dir</span><span class="p">()]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">files</span><span class="p">[</span><span class="n">file</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">file</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">force_template</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Sets the template to systematically use for all objects.</span>
@@ -557,7 +586,7 @@
 <span class="sd">        contents of the templates directory.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">template_files</span><span class="p">[</span><span class="s2">&quot;__FORCE__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">template_file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">files</span><span class="p">[</span><span class="s2">&quot;__FORCE__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">template_file</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">get_template</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fallback</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;class&quot;</span><span class="p">,</span> <span class="n">variant</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Template</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Finds the template for a given object.</span>
@@ -572,18 +601,9 @@
 
         <span class="n">candidate</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
-        <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;__FORCE__&quot;</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">candidate</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">variant</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">+</span> <span class="n">variant</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">candidate</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">fallback</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">+</span> <span class="n">variant</span><span class="p">)</span>
-
+        <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;__FORCE__&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">candidate</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">candidate</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">fallback</span><span class="p">)</span>
-
+            <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_file</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="n">fallback</span><span class="p">,</span> <span class="n">variant</span><span class="o">=</span><span class="n">variant</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;.jinja2&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">candidate</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
 
@@ -591,6 +611,71 @@
             <span class="k">with</span> <span class="n">candidate</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">templates</span><span class="p">[</span><span class="n">candidate</span><span class="p">]</span> <span class="o">=</span> <span class="n">Template</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">templates</span><span class="p">[</span><span class="n">candidate</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">variant</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Finds a (non-template) file.</span>
+
+<span class="sd">        :param name: The basename of the file to find.</span>
+<span class="sd">        :param variant: The name of an optional template variant.</span>
+<span class="sd">        :return: The requested file, or None if there is no corresponding file</span>
+<span class="sd">            in any of the template directories.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_file</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">stem</span><span class="p">,</span> <span class="n">variant</span><span class="o">=</span><span class="n">variant</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="n">f</span><span class="o">.</span><span class="n">suffix</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_file</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fallback</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">variant</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">suffix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Shared logic for the get_template and get_file methods.</span>
+
+<span class="sd">        :param name: The basename of the file to find.</span>
+<span class="sd">        :param fallback: Another file to look up for if the specified file</span>
+<span class="sd">            cannot be found.</span>
+<span class="sd">        :param variant: The name of an optional template variant.</span>
+<span class="sd">        :param suffix: The suffix of the file to look for (e.g. `.jinja2` for</span>
+<span class="sd">            a template file).</span>
+<span class="sd">        :return: The path to the requested file, or None if the file (or the</span>
+<span class="sd">            fallback) could not be found.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">candidate</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="n">variant</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">+</span> <span class="n">variant</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">candidate</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">fallback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">fallback</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">+</span> <span class="n">variant</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">candidate</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">candidate</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">fallback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">candidate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">files</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">fallback</span> <span class="o">+</span> <span class="n">suffix</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">candidate</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_find_root_schemas</span><span class="p">(</span><span class="n">schema_directory</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">importmap</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Path</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Finds all the root schemas in the specified directory.</span>
+
+<span class="sd">    A root schema, in the context of this method, in a schema that is not</span>
+<span class="sd">    imported by any other schema found under the specified directory.</span>
+
+<span class="sd">    :param schema_directory: The directory where to search for schemas.</span>
+<span class="sd">    :param importmap: The import map to use, if any.</span>
+<span class="sd">    :return: A list of paths to root schemas.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># This is woefully inefficient as we have to load each schema</span>
+    <span class="c1"># through SchemaView, but this is necessary to ensure that we</span>
+    <span class="c1"># use the very same import resolution logic as the generator.</span>
+    <span class="n">imported_ids</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">schema_ids</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">schema_path</span> <span class="ow">in</span> <span class="n">schema_directory</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;**/*.yaml&quot;</span><span class="p">):</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="n">SchemaView</span><span class="p">(</span><span class="n">schema_path</span><span class="p">,</span> <span class="n">importmap</span><span class="o">=</span><span class="n">importmap</span><span class="p">)</span>
+        <span class="n">schema_ids</span><span class="p">[</span><span class="n">schema_path</span><span class="p">]</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">id</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">view</span><span class="o">.</span><span class="n">all_schema</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">id</span> <span class="o">!=</span> <span class="n">view</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">id</span><span class="p">:</span>
+                <span class="n">imported_ids</span><span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">root_schemas</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">schema_ids</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">imported_ids</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">root_schemas</span>
 
 
 <div class="viewcode-block" id="JavaGenerator">
@@ -603,12 +688,6 @@
 
 <span class="sd">    This generators supports an arbitrary number of different styles through</span>
 <span class="sd">    the use of “template variants“.</span>
-
-<span class="sd">    Currently, two variants are available:</span>
-
-<span class="sd">    - the default variant represents LinkML classes as Java classes carrying</span>
-<span class="sd">      Lombok annotations (https://projectlombok.org);</span>
-<span class="sd">    - the `records` variant represents LinkML classes as Java 16 records.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># ClassVars</span>
@@ -616,15 +695,13 @@
     <span class="n">generatorversion</span> <span class="o">=</span> <span class="s2">&quot;0.0.1&quot;</span>
     <span class="n">valid_formats</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;java&quot;</span><span class="p">]</span>
     <span class="n">file_extension</span> <span class="o">=</span> <span class="s2">&quot;java&quot;</span>
+    <span class="n">config_section_name</span> <span class="o">=</span> <span class="s2">&quot;java&quot;</span>
 
     <span class="c1"># ObjectVars</span>
     <span class="n">template_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">template_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">template_cache</span><span class="p">:</span> <span class="n">TemplateCache</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">TemplateCache</span><span class="p">())</span>
-
-    <span class="n">gen_classvars</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="n">gen_slots</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="n">genmeta</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">custom_type_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="nb">dict</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">template_cache</span><span class="o">.</span><span class="n">add_directory</span><span class="p">(</span><span class="n">DEFAULT_TEMPLATE_DIR</span><span class="p">)</span>
@@ -633,6 +710,17 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">template_cache</span><span class="o">.</span><span class="n">force_template</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">template_file</span><span class="p">))</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">__post_init__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">package</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">package</span> <span class="o">=</span> <span class="s2">&quot;example&quot;</span>
+        <span class="c1"># str() guards against a non-string value, e.g. an unquoted number in config.yaml</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_valid_java_package</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="si">!r}</span><span class="s2"> is not a valid Java package name&quot;</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_generator_args</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">package</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;package&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">package</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_is_valid_java_package</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">package</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="n">click</span><span class="o">.</span><span class="n">UsageError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">package</span><span class="si">!r}</span><span class="s2"> is not a valid Java package name&quot;</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">default_value_for_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">typ</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">TYPE_DEFAULTS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">)</span>
@@ -651,13 +739,30 @@
         <span class="k">return</span> <span class="n">name</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">map_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="n">TypeDefinition</span><span class="p">,</span> <span class="n">required</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">uri</span><span class="p">:</span>
+        <span class="n">typ</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="c1"># For looking up in the custom type map, we try with the</span>
+        <span class="c1"># &quot;native&quot; URI first, and then the &quot;declared&quot; URI. This is</span>
+        <span class="c1"># because declared URIs may not be enough to unambiguously</span>
+        <span class="c1"># distinguish between types (for example, both linkml:uri and</span>
+        <span class="c1"># linkml:uriorcurie have the same declared URI xsd:anyURI;</span>
+        <span class="c1"># likewise, linkml:string, linkml:curie, and linkml:ncname all</span>
+        <span class="c1"># share the same declared URI xsd:string).</span>
+        <span class="n">uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_uri</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">native</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">typ</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">custom_type_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">typ</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Try again with the declared URI</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_uri</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">native</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">typ</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">custom_type_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">typ</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">t</span><span class="o">.</span><span class="n">uri</span><span class="p">:</span>
+            <span class="c1"># Fallback to the static map</span>
+            <span class="n">typ</span> <span class="o">=</span> <span class="n">TYPEMAP</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">typ</span><span class="p">:</span>
             <span class="c1"># We use &quot;boxed&quot; types (Boolean, Integer, Double, Float) by</span>
             <span class="c1"># default because we need to represent the case where a</span>
             <span class="c1"># value has not explicitly been set. But that requirement no</span>
             <span class="c1"># longer holds when required == true, so in that case we can</span>
             <span class="c1"># use primitive types (boolean, int, double, float) instead.</span>
-            <span class="n">typ</span> <span class="o">=</span> <span class="n">TYPEMAP</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">uri</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">required</span> <span class="ow">and</span> <span class="p">(</span><span class="n">typ</span> <span class="o">==</span> <span class="s2">&quot;Boolean&quot;</span> <span class="ow">or</span> <span class="n">typ</span> <span class="o">==</span> <span class="s2">&quot;Double&quot;</span> <span class="ow">or</span> <span class="n">typ</span> <span class="o">==</span> <span class="s2">&quot;Float&quot;</span><span class="p">):</span>
                 <span class="n">typ</span> <span class="o">=</span> <span class="n">typ</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
             <span class="k">elif</span> <span class="n">required</span> <span class="ow">and</span> <span class="n">typ</span> <span class="o">==</span> <span class="s2">&quot;Integer&quot;</span><span class="p">:</span>
@@ -667,6 +772,39 @@
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">map_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_type</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">typeof</span><span class="p">))</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">t</span><span class="si">}</span><span class="s2"> cannot be mapped to a type&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_custom_type_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets the URI of a custom-mapped type.</span>
+
+<span class="sd">        :param name: The name of a LinkML element.</span>
+<span class="sd">        :return: If the given name is the name of a LinkML type for which a</span>
+<span class="sd">            custom mapping to a Java type exists, this returns the URI of the</span>
+<span class="sd">            type. Otherwise this returns None.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">all_types</span><span class="p">():</span>
+            <span class="c1"># Same logic as for map_type: we query using the native URI</span>
+            <span class="c1"># first, then fallback to the declared URI</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_uri</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">native</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">uri</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">custom_type_map</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">uri</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_uri</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">native</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">uri</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">custom_type_map</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">uri</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read_custom_type_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">variant</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parses the variant-specific type map, if present.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">custom_type_map</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="n">mapfile</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_cache</span><span class="o">.</span><span class="n">get_file</span><span class="p">(</span><span class="s2">&quot;_types.map&quot;</span><span class="p">,</span> <span class="n">variant</span><span class="o">=</span><span class="n">variant</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">mapfile</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">mapfile</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">with</span> <span class="n">mapfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+                    <span class="n">line</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">):</span>
+                        <span class="k">continue</span>
+                    <span class="n">items</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">items</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">custom_type_map</span><span class="p">[</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">items</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -695,6 +833,7 @@
 <span class="sd">        :return: A :class:`JavaBundle` whose ``files`` maps each output filename</span>
 <span class="sd">            (e.g. ``&quot;Address.java&quot;``) to its rendered source.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_read_custom_type_map</span><span class="p">(</span><span class="n">variant</span><span class="o">=</span><span class="n">template_variant</span><span class="p">)</span>
         <span class="n">oodocs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_documents</span><span class="p">()</span>
         <span class="c1"># Create additional documents for additional templates and visitors</span>
         <span class="k">if</span> <span class="n">extra_templates</span><span class="p">:</span>
@@ -703,6 +842,8 @@
         <span class="k">if</span> <span class="n">visitors</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">visitor</span> <span class="ow">in</span> <span class="n">visitors</span><span class="p">:</span>
                 <span class="n">visited_name</span> <span class="o">=</span> <span class="n">visitor</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_class</span><span class="p">(</span><span class="n">visited_name</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">visited_name</span><span class="si">}</span><span class="s2"> does not appear to be a valid name for a class to visit&quot;</span><span class="p">)</span>
                 <span class="n">visitor_name</span> <span class="o">=</span> <span class="s2">&quot;I&quot;</span> <span class="o">+</span> <span class="n">camelcase</span><span class="p">(</span><span class="n">visited_name</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;Visitor&quot;</span>
                 <span class="n">oodocs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OOVisitorDocument</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">visitor_name</span><span class="p">,</span> <span class="n">package</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">,</span> <span class="n">visited_object</span><span class="o">=</span><span class="n">visited_name</span><span class="p">))</span>
         <span class="k">else</span><span class="p">:</span>
@@ -798,28 +939,16 @@
 <span class="sd">        :param name: A class name.</span>
 <span class="sd">        :returns: True if cls has any ancestor with the specified name.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">cls</span><span class="o">.</span><span class="n">is_a</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="k">elif</span> <span class="bp">cls</span><span class="o">.</span><span class="n">is_a</span> <span class="o">==</span> <span class="n">name</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_ancestor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_class</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">is_a</span><span class="p">),</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">class_ancestors</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">mixins</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">reflexive</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_descendants</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">_descendants</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_descendants</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets all the descendants of a class.</span>
 
 <span class="sd">        :param name: A class name.</span>
-<span class="sd">        :param _descendants: The list to which to append the names of the</span>
-<span class="sd">            descendant classes.</span>
 <span class="sd">        :returns: A flat list of the names of all classes that inherit from</span>
 <span class="sd">            the named class.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">_descendants</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">_descendants</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">class_children</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
-            <span class="n">_descendants</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">get_descendants</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">_descendants</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">_descendants</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">class_descendants</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">mixins</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">reflexive</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">get_class_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts a LinkML class name to a Java class name.&quot;&quot;&quot;</span>
@@ -855,11 +984,27 @@
             <span class="k">return</span> <span class="s2">&quot;get&quot;</span> <span class="o">+</span> <span class="n">camelcase</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">get_slot_actual_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">SlotDefinition</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">slot</span><span class="o">.</span><span class="n">alias</span> <span class="k">if</span> <span class="n">slot</span><span class="o">.</span><span class="n">alias</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_aliases</span> <span class="k">else</span> <span class="n">slot</span><span class="o">.</span><span class="n">name</span></div>
+        <span class="k">return</span> <span class="n">slot</span><span class="o">.</span><span class="n">alias</span> <span class="k">if</span> <span class="n">slot</span><span class="o">.</span><span class="n">alias</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_aliases</span> <span class="k">else</span> <span class="n">slot</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">needs_extra_slots</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">klass</span><span class="p">:</span> <span class="n">ClassDefinition</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Indicates whether a class requires handling of extra slots.</span>
+
+<span class="sd">        A Java class representing a LinkML class requires special code to</span>
+<span class="sd">        handle extra slots if (1) the LinkML class is configured to allow</span>
+<span class="sd">        extra slots and (2) none of its parent classes are already</span>
+<span class="sd">        configured to allow extra slots.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">klass</span><span class="o">.</span><span class="n">extra_slots</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">klass</span><span class="o">.</span><span class="n">extra_slots</span><span class="o">.</span><span class="n">allowed</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">ancestor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">class_ancestors</span><span class="p">(</span><span class="n">klass</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">mixins</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">reflexive</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+            <span class="n">ancestor_extra_slots</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">schemaview</span><span class="o">.</span><span class="n">get_class</span><span class="p">(</span><span class="n">ancestor</span><span class="p">)</span><span class="o">.</span><span class="n">extra_slots</span>
+            <span class="k">if</span> <span class="n">ancestor_extra_slots</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">ancestor_extra_slots</span><span class="o">.</span><span class="n">allowed</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
 
 
 
-<span class="nd">@shared_arguments</span><span class="p">(</span><span class="n">JavaGenerator</span><span class="p">)</span>
+<span class="nd">@shared_arguments</span><span class="p">(</span><span class="n">JavaGenerator</span><span class="p">,</span> <span class="n">accepts_directory_input</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
     <span class="s2">&quot;--output-directory&quot;</span><span class="p">,</span>
     <span class="n">default</span><span class="o">=</span><span class="s2">&quot;output&quot;</span><span class="p">,</span>
@@ -868,6 +1013,15 @@
 <span class="p">)</span>
 <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;--package&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Package name where relevant for generated class files&quot;</span><span class="p">)</span>
 <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
+    <span class="s2">&quot;--config-file&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;-C&quot;</span><span class="p">,</span>
+    <span class="nb">type</span><span class="o">=</span><span class="n">click</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="s2">&quot;rb&quot;</span><span class="p">),</span>
+    <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path to a YAML config file supplying defaults under &quot;</span>
+    <span class="s2">&quot;&#39;generator_args: {java: {package: ...}}&#39;. Keys are this command&#39;s own option &quot;</span>
+    <span class="s2">&quot;names with dashes as underscores; explicit command-line options always take &quot;</span>
+    <span class="s2">&quot;precedence over the config file.&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
     <span class="s2">&quot;--template-dir&quot;</span><span class="p">,</span>
     <span class="nb">type</span><span class="o">=</span><span class="n">click</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">exists</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">file_okay</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dir_okay</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">path_type</span><span class="o">=</span><span class="n">Path</span><span class="p">),</span>
     <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Directory containing the Jinja2 templates to use&quot;</span><span class="p">,</span>
@@ -875,6 +1029,7 @@
 <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;--template-variant&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Use the specified template variant&quot;</span><span class="p">)</span>
 <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
     <span class="s2">&quot;--template-file&quot;</span><span class="p">,</span>
+    <span class="nb">type</span><span class="o">=</span><span class="n">click</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">exists</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dir_okay</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
     <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;Optional jinja2 template to use for class generation</span>
 <span class="s2">            (takes precedence over --template-dir)&quot;&quot;&quot;</span><span class="p">,</span>
 <span class="p">)</span>
@@ -890,26 +1045,40 @@
 <span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;--use-aliases/--no-use-aliases&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Use aliases when available to name fields&quot;</span><span class="p">)</span>
 <span class="nd">@click</span><span class="o">.</span><span class="n">version_option</span><span class="p">(</span><span class="n">__version__</span><span class="p">,</span> <span class="s2">&quot;-V&quot;</span><span class="p">,</span> <span class="s2">&quot;--version&quot;</span><span class="p">)</span>
 <span class="nd">@click</span><span class="o">.</span><span class="n">command</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;java&quot;</span><span class="p">)</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">pass_context</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">cli</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">,</span>
     <span class="n">yamlfile</span><span class="p">,</span>
     <span class="n">output_directory</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">package</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">config_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">template_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">template_variant</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">template_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">generate_records</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">head</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">emit_metadata</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">genmeta</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-    <span class="n">classvars</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="n">true_enums</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">use_aliases</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">extra_template</span><span class="o">=</span><span class="p">[],</span>
     <span class="n">visitor</span><span class="o">=</span><span class="p">[],</span>
+    <span class="n">importmap</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="o">**</span><span class="n">args</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate java classes to represent a LinkML model&quot;&quot;&quot;</span>
+    <span class="c1"># --package now consumed from **args so config overlay can fill, and it reaches the generator</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">read_generator_config</span><span class="p">(</span><span class="n">config_file</span><span class="p">,</span> <span class="n">JavaGenerator</span><span class="o">.</span><span class="n">config_section_name</span><span class="p">)</span>
+    <span class="n">apply_config_defaults</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+    <span class="n">JavaGenerator</span><span class="o">.</span><span class="n">validate_generator_args</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+    <span class="c1"># rebind named locals so overlaid config values are honored and never collide with **args below</span>
+    <span class="n">output_directory</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;output_directory&quot;</span><span class="p">,</span> <span class="n">output_directory</span><span class="p">)</span>
+    <span class="n">template_dir</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;template_dir&quot;</span><span class="p">,</span> <span class="n">template_dir</span><span class="p">)</span>
+    <span class="n">template_variant</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;template_variant&quot;</span><span class="p">,</span> <span class="n">template_variant</span><span class="p">)</span>
+    <span class="n">template_file</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;template_file&quot;</span><span class="p">,</span> <span class="n">template_file</span><span class="p">)</span>
+    <span class="n">generate_records</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;generate_records&quot;</span><span class="p">,</span> <span class="n">generate_records</span><span class="p">)</span>
+    <span class="n">true_enums</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;true_enums&quot;</span><span class="p">,</span> <span class="n">true_enums</span><span class="p">)</span>
+    <span class="n">use_aliases</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;use_aliases&quot;</span><span class="p">,</span> <span class="n">use_aliases</span><span class="p">)</span>
+    <span class="n">extra_template</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;extra_template&quot;</span><span class="p">,</span> <span class="n">extra_template</span><span class="p">)</span>
+    <span class="n">visitor</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;visitor&quot;</span><span class="p">,</span> <span class="n">visitor</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">generate_records</span><span class="p">:</span>
         <span class="n">template_variant</span> <span class="o">=</span> <span class="s2">&quot;records&quot;</span>
     <span class="k">if</span> <span class="n">template_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -926,18 +1095,50 @@
     <span class="k">if</span> <span class="n">head</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">deprecation_warning</span><span class="p">(</span><span class="s2">&quot;metadata-flag&quot;</span><span class="p">)</span>
         <span class="n">args</span><span class="p">[</span><span class="s2">&quot;metadata&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">head</span>
-    <span class="n">JavaGenerator</span><span class="p">(</span>
+
+    <span class="k">if</span> <span class="n">yamlfile</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;package&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>  <span class="c1"># inferred per schema from the directory layout</span>
+        <span class="c1"># Generate code for all root schemas under the specified directory,</span>
+        <span class="c1"># inferring the package name from the directory hierarchy</span>
+        <span class="n">schemas</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">Path</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">schema_path</span> <span class="ow">in</span> <span class="n">_find_root_schemas</span><span class="p">(</span><span class="n">yamlfile</span><span class="p">,</span> <span class="n">importmap</span><span class="p">):</span>
+            <span class="n">package_dir</span> <span class="o">=</span> <span class="n">schema_path</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">yamlfile</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span>
+            <span class="n">package_name</span> <span class="o">=</span> <span class="n">package_dir</span><span class="o">.</span><span class="n">as_posix</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="s2">&quot;.&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_valid_java_package</span><span class="p">(</span><span class="n">package_name</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Inferred package name </span><span class="si">{</span><span class="n">package_name</span><span class="si">}</span><span class="s2"> is not a valid Java package name, aborting directory mode&quot;</span>
+                <span class="p">)</span>
+            <span class="n">output_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">output_directory</span><span class="p">)</span> <span class="o">/</span> <span class="n">package_dir</span>
+            <span class="n">schemas</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">schema_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">package_name</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">schema_path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">,</span> <span class="n">package_name</span> <span class="ow">in</span> <span class="n">schemas</span><span class="p">:</span>
+            <span class="n">JavaGenerator</span><span class="p">(</span>
+                <span class="n">schema_path</span><span class="p">,</span>
+                <span class="n">importmap</span><span class="o">=</span><span class="n">importmap</span><span class="p">,</span>
+                <span class="n">package</span><span class="o">=</span><span class="n">package_name</span><span class="p">,</span>
+                <span class="n">template_dir</span><span class="o">=</span><span class="n">template_dir</span><span class="p">,</span>
+                <span class="n">template_file</span><span class="o">=</span><span class="n">template_file</span><span class="p">,</span>
+                <span class="n">true_enums</span><span class="o">=</span><span class="n">true_enums</span><span class="p">,</span>
+                <span class="n">use_aliases</span><span class="o">=</span><span class="n">use_aliases</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">args</span><span class="p">,</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span>
+                <span class="n">output_dir</span><span class="p">,</span> <span class="n">template_variant</span><span class="o">=</span><span class="n">template_variant</span><span class="p">,</span> <span class="n">extra_templates</span><span class="o">=</span><span class="n">extra_template</span><span class="p">,</span> <span class="n">visitors</span><span class="o">=</span><span class="n">visitor</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span>
+            <span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="c1"># The package was already validated above; a ValueError raised while actually</span>
+    <span class="c1"># constructing the generator here is therefore a genuine failure (e.g. an</span>
+    <span class="c1"># unloadable schema), not a bad package name, and is left to propagate with</span>
+    <span class="c1"># its own traceback rather than being caught and mistaken for one.</span>
+    <span class="n">generator</span> <span class="o">=</span> <span class="n">JavaGenerator</span><span class="p">(</span>
         <span class="n">yamlfile</span><span class="p">,</span>
-        <span class="n">package</span><span class="o">=</span><span class="n">package</span><span class="p">,</span>
         <span class="n">template_dir</span><span class="o">=</span><span class="n">template_dir</span><span class="p">,</span>
         <span class="n">template_file</span><span class="o">=</span><span class="n">template_file</span><span class="p">,</span>
-        <span class="n">genmeta</span><span class="o">=</span><span class="n">genmeta</span><span class="p">,</span>
-        <span class="n">gen_classvars</span><span class="o">=</span><span class="n">classvars</span><span class="p">,</span>
-        <span class="n">gen_slots</span><span class="o">=</span><span class="n">slots</span><span class="p">,</span>
         <span class="n">true_enums</span><span class="o">=</span><span class="n">true_enums</span><span class="p">,</span>
         <span class="n">use_aliases</span><span class="o">=</span><span class="n">use_aliases</span><span class="p">,</span>
+        <span class="n">importmap</span><span class="o">=</span><span class="n">importmap</span><span class="p">,</span>
         <span class="o">**</span><span class="n">args</span><span class="p">,</span>
-    <span class="p">)</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span>
+    <span class="p">)</span>
+    <span class="n">generator</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span>
         <span class="n">output_directory</span><span class="p">,</span> <span class="n">template_variant</span><span class="o">=</span><span class="n">template_variant</span><span class="p">,</span> <span class="n">extra_templates</span><span class="o">=</span><span class="n">extra_template</span><span class="p">,</span> <span class="n">visitors</span><span class="o">=</span><span class="n">visitor</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span>
     <span class="p">)</span>
 
@@ -981,13 +1182,363 @@
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
-    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
-    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-    <script type="module">
-import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.2.0/dist/mermaid.esm.min.mjs";
-window.addEventListener("load", () => mermaid.run());
-</script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+
+
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = "pre.mermaid {\n    /* Same as .mermaid-container > pre */\n    display: block;\n    width: 100%;\n}\n\npre.mermaid > svg {\n    /* Same as .mermaid-container > pre > svg */\n    height: 500px;\n    width: 100%;\n    max-width: 100% !important;\n}";
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = ".mermaid-container {\n    position: relative;\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n}\n\n.mermaid-container > pre {\n    display: block;\n    width: 100%;\n}\n\n.mermaid-container > pre > svg {\n    height: 500px;\n    width: 100%;\n    max-width: 100% !important;\n}\n\n.mermaid-fullscreen-btn {\n    position: absolute;\n    width: 28px;\n    height: 28px;\n    background: rgba(255, 255, 255, 0.95);\n    border: 1px solid rgba(0, 0, 0, 0.3);\n    border-radius: 4px;\n    cursor: pointer;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    transition: all 0.2s;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);\n    font-size: 14px;\n    line-height: 1;\n    padding: 0;\n    color: #333;\n}\n\n.mermaid-fullscreen-btn:hover {\n    opacity: 100% !important;\n    background: rgba(255, 255, 255, 1);\n    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);\n    transform: scale(1.1);\n}\n\n.mermaid-fullscreen-btn.dark-theme {\n    background: rgba(50, 50, 50, 0.95);\n    border: 1px solid rgba(255, 255, 255, 0.3);\n    color: #e0e0e0;\n}\n\n.mermaid-fullscreen-btn.dark-theme:hover {\n    background: rgba(60, 60, 60, 1);\n    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);\n}\n\n.mermaid-fullscreen-modal {\n    display: none;\n    position: fixed !important;\n    top: 0 !important;\n    left: 0 !important;\n    width: 95vw;\n    height: 100vh;\n    background: rgba(255, 255, 255, 0.98);\n    z-index: 9999;\n    padding: 20px;\n    overflow: auto;\n}\n\n.mermaid-fullscreen-modal.dark-theme {\n    background: rgba(0, 0, 0, 0.98);\n}\n\n.mermaid-fullscreen-modal.active {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen {\n    position: relative;\n    width: 95vw;\n    height: 90vh;\n    max-width: 95vw;\n    max-height: 90vh;\n    background: white;\n    border-radius: 8px;\n    padding: 20px;\n    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);\n    overflow: auto;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen.dark-theme {\n    background: #1a1a1a;\n    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);\n}\n\n.mermaid-container-fullscreen pre.mermaid {\n    width: 100%;\n    height: 100%;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen .mermaid svg {\n    height: 100% !important;\n    width: 100% !important;\n    cursor: grab;\n}\n\n.mermaid-fullscreen-close {\n    position: fixed !important;\n    top: 20px !important;\n    right: 20px !important;\n    width: 40px;\n    height: 40px;\n    background: rgba(255, 255, 255, 0.95);\n    border: 1px solid rgba(0, 0, 0, 0.2);\n    border-radius: 50%;\n    cursor: pointer;\n    z-index: 10000;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);\n    transition: all 0.2s;\n    font-size: 24px;\n    line-height: 1;\n    color: #333;\n}\n\n.mermaid-fullscreen-close:hover {\n    background: white;\n    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);\n    transform: scale(1.1);\n}\n\n.mermaid-fullscreen-close.dark-theme {\n    background: rgba(50, 50, 50, 0.95);\n    border: 1px solid rgba(255, 255, 255, 0.2);\n    color: #e0e0e0;\n}\n\n.mermaid-fullscreen-close.dark-theme:hover {\n    background: rgba(60, 60, 60, 1);\n    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);\n}\n\n.mermaid-fullscreen-modal .mermaid-fullscreen-btn {\n    display: none !important;\n}";
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+let _lazyObserver = null;
+let _renderQueue = Promise.resolve();
+let closeModal = () => {};
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal?.classList.contains('active')) {
+        closeModal();
+    }
+});
+
+// Apply d3 zoom to each SVG. Idempotent: an SVG already wrapped is skipped,
+// so this is safe to call both for the initial batch and for diagrams that
+// render lazily once they become visible.
+const addZoomToSvgs = (svgs) => {
+    svgs.each(function() {
+        if (this.getAttribute('data-zoom-applied') === 'true') return;
+        var svg = d3.select(this);
+        svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+        var inner = svg.select("g");
+        var zoom = d3.zoom().on("zoom", function(event) {
+            inner.attr("transform", event.transform);
+        });
+        svg.call(zoom);
+        this.setAttribute('data-zoom-applied', 'true');
+    });
+};
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        // Disconnect any previous lazy rendering observer
+        if (_lazyObserver) {
+            _lazyObserver.disconnect();
+            _lazyObserver = null;
+        }
+
+        all_mermaids.forEach((el) => {
+            el.removeAttribute('data-mermaid-deferred');
+            el.removeAttribute('data-mermaid-render-failed');
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+
+        // Separate visible and hidden elements. Mermaid's layout engine measures
+        // text dimensions via the DOM, which fails for elements hidden by a parent
+        // (e.g., Reveal.js non-active slides, sphinx-design unopened tabs),
+        // producing broken SVGs. Render visible elements now, defer hidden ones.
+        const visible = [];
+        const hidden = [];
+        all_mermaids.forEach((el) => {
+            // offsetParent is null for display:none ancestors.
+            // getClientRects().length > 0 catches position:fixed elements
+            // (which also have null offsetParent but are still visible).
+            if (el.offsetParent !== null || el.getClientRects().length > 0) {
+                visible.push(el);
+            } else {
+                hidden.push(el);
+                el.setAttribute('data-mermaid-deferred', 'true');
+            }
+        });
+
+        if (visible.length > 0) {
+            try {
+                await mermaid.run({ nodes: visible });
+            } catch (e) {
+                console.error("Mermaid rendering failed:", e);
+            }
+        }
+
+        // Lazily render hidden elements when they become visible.
+        // Uses a promise chain (_renderQueue) to serialize rendering,
+        // since IntersectionObserver may report multiple entries at once
+        // and mermaid.run() is not safe to call concurrently.
+        if (hidden.length > 0) {
+            if (typeof IntersectionObserver === 'undefined') {
+                console.warn("IntersectionObserver not available; hidden mermaid diagrams will not render.");
+            } else {
+                _renderQueue = Promise.resolve();
+                _lazyObserver = new IntersectionObserver((entries) => {
+                    for (const entry of entries) {
+                        if (entry.isIntersecting && entry.target.getAttribute("data-processed") !== "true") {
+                            _lazyObserver.unobserve(entry.target);
+                            const el = entry.target;
+                            _renderQueue = _renderQueue.then(async () => {
+                                try {
+                                    await mermaid.run({ nodes: [el] });
+                                    el.removeAttribute('data-mermaid-deferred');
+                                    // Apply zoom to the now-rendered diagram, matching
+                                    // the decoration visible diagrams receive.
+                                    if (false) {
+                                        addZoomToSvgs(d3.selectAll("").select(function() {
+                                            return this.querySelector("svg");
+                                        }));
+                                    }
+                                } catch (e) {
+                                    console.error("Mermaid deferred rendering failed:", e);
+                                    el.removeAttribute('data-mermaid-deferred');
+                                    el.setAttribute('data-mermaid-render-failed', 'true');
+                                }
+                            });
+                        }
+                    }
+                });
+                hidden.forEach((el) => _lazyObserver.observe(el));
+            }
+        }
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    // Exclude deferred (hidden) and render-failed elements from completion checks
+    const mermaids_active = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])");
+    const mermaids_processed = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])[data-processed='true']");
+
+    if (false) {
+        const mermaids_to_add_zoom = 0 === -1 ? mermaids_active.length : 0;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("").select(function() {
+                return this.querySelector("svg");
+            });
+            // Wait until every active (visible) diagram has rendered. Deferred
+            // diagrams are excluded, so a fixed d3_node_count that counts a
+            // hidden diagram no longer loops forever waiting for its SVG.
+            if(mermaids_active.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            }
+            addZoomToSvgs(svgs);
+        }
+    } else if(mermaids_active.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if (!true) return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = "\u26f6";
+        fullscreenBtn.style.opacity = "50%";
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scrollX, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.display = 'block';
+
+                if (false) {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+
+
+const load = async () => {
+    initStyles();
+
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...{"startOnLoad": false},
+                ...{ darkMode: darkTheme, theme: darkTheme ? "dark" : "default" },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...{"startOnLoad": false},
+    ...{ darkMode: darkTheme, theme: darkTheme ? "dark" : "default" },
+    }
+);
+
+window.addEventListener("load", load);
+window.runMermaid = runMermaid;</script>
     </body>
 </html>
