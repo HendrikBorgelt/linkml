@@ -1,11 +1,13 @@
 """
-Tests for the SHACL generator's handling of shared ``class_uri`` / ``slot_uri`` and recommended slots.
+Tests for the SHACL generator's handling of classes and slots that share an IRI, and of recommended slots.
 
-1. Slots of one class sharing a ``slot_uri`` are merged into one property shape (``sh:or``) with
+1. Slots of one shape sharing a ``slot_uri`` are merged into one property shape (``sh:or``) with
    per-slot cardinalities as qualified counts, instead of conflicting property shapes.
-2. Classes sharing a ``class_uri`` get distinct shapes; only the group's root is targeted and the
-   other classes are role shapes reached through the slots that name them.
+2. With native names, classes sharing a ``class_uri`` get distinct shapes; only the group's root is
+   targeted and the other classes are role shapes reached through the slots that name them. With
+   class_uri names they are emitted into one consistent shape.
 3. ``recommended: true`` slots become ``sh:Warning`` constraints, scoped through the referencing slot.
+4. A slot on ``rdf:type`` accepts the node's own class assertion (linkml#3931).
 """
 
 import logging
@@ -240,7 +242,11 @@ slots:
 """
     )
     shapes(tmp_path, schema)
-    assert "loosens slot s" in caplog.text
+    # one warning per relaxation: "not required any more" is the same change as "fewer values"
+    assert [r.getMessage() for r in caplog.records if "loosens slot s" in r.getMessage()] == [
+        "Class Child (role of Parent, class_uri http://example.org/Shared) loosens slot s: at least 0 values "
+        "instead of 1. A node valid for the role may then be invalid for its parent."
+    ]
 
 
 def test_warns_about_closed_unrelated_roots(tmp_path, caplog):
@@ -287,7 +293,7 @@ def test_recommended_is_ignored_by_default(tmp_path):
 
 
 def test_recommended_warnings_follow_the_referencing_slot(tmp_path):
-    g = shapes(tmp_path, ROLE_SCHEMA, recommended="warning")
+    g = shapes(tmp_path, ROLE_SCHEMA, recommended_warnings=True)
     conforms, results = run(g, RECOMMENDED_DATA)
     # conforms: only warnings. The dataset's own activity lacks `used`; the study's simulation lacks `software`;
     # the unreferenced activity is nobody's business, and `used` is not asked of the simulation (same predicate
@@ -299,20 +305,13 @@ def test_recommended_warnings_follow_the_referencing_slot(tmp_path):
 
 
 def test_recommendations_are_separate_shapes(tmp_path):
-    g = shapes(tmp_path, ROLE_SCHEMA, recommended="warning")
+    g = shapes(tmp_path, ROLE_SCHEMA, recommended_warnings=True)
     # nothing recommended leaks into the hard shapes
     for shape in (URIRef(EX + "DataGeneratingActivity"), URIRef("http://www.w3.org/ns/dcat#Dataset")):
         assert not any((p, SH.severity, SH.Warning) in g for p in g.objects(shape, SH.property))
     recommendations = URIRef(str(EX + "DataGeneratingActivity") + "Recommendations")
     assert (recommendations, RDF.type, SH.NodeShape) in g
     assert (recommendations, SH.targetClass, None) not in g
-
-
-def test_invalid_recommended_mode_is_rejected(tmp_path):
-    path = tmp_path / "schema.yaml"
-    path.write_text(ROLE_SCHEMA)
-    with pytest.raises(ValueError, match="recommended"):
-        ShaclGenerator(str(path), recommended="error")
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +378,7 @@ slots:
     g = rdflib.Graph()
     g.parse(data=shaclstr, format="turtle")
 
-    # the generated dummy shape of a group without a common parent is not a class shape
+    # the role union shape of a group without a common parent is not a class shape
     shapes = [s for s in g.subjects(RDF.type, SH.NodeShape) if not str(s).endswith("Roles")]
 
     # EXPECTED: 3 distinct shapes (1 per LinkML class)
@@ -443,7 +442,7 @@ slots:
     g = rdflib.Graph()
     g.parse(data=shaclstr, format="turtle")
 
-    # the generated dummy shape of a group without a common parent is not a class shape
+    # the role union shape of a group without a common parent is not a class shape
     shapes = [s for s in g.subjects(RDF.type, SH.NodeShape) if not str(s).endswith("Roles")]
 
     # Should have 3 distinct shapes
@@ -511,7 +510,7 @@ slots:
     g = rdflib.Graph()
     g.parse(data=shaclstr, format="turtle")
 
-    # the generated dummy shape of a group without a common parent is not a class shape
+    # the role union shape of a group without a common parent is not a class shape
     shapes = [s for s in g.subjects(RDF.type, SH.NodeShape) if not str(s).endswith("Roles")]
 
     # Should have 3 distinct shapes (2 mixins + 1 concrete)
@@ -617,7 +616,7 @@ def test_merged_slots_with_different_object_ranges_keep_their_own_cardinality(tm
 
 
 # ---------------------------------------------------------------------------
-# 6. groups with one parent, and groups with several parents (dummy shape)
+# 6. groups with one parent, and groups with several parents (role union shape)
 # ---------------------------------------------------------------------------
 SINGLE_ROOT_SCHEMA = (
     HEADER
@@ -639,14 +638,14 @@ slots:
 )
 
 
-def test_single_parent_group_targets_the_parent_and_builds_no_dummy(tmp_path, caplog):
+def test_single_parent_group_targets_the_parent_and_builds_no_role_union(tmp_path, caplog):
     g = shapes(tmp_path, SINGLE_ROOT_SCHEMA)
     assert set(g.subjects(SH.targetClass, None)) == {URIRef(EX + "Parent")}
     assert (URIRef(EX + "SharedRoles"), None, None) not in g
     assert "only Parent gets sh:targetClass" in caplog.text
 
 
-DUMMY_SCHEMA = (
+ROLE_UNION_SCHEMA = (
     HEADER
     + """
 classes:
@@ -673,15 +672,15 @@ slots:
 )
 
 
-def test_several_parents_get_a_dummy_shape_that_lists_every_role(tmp_path, caplog):
-    g = shapes(tmp_path, DUMMY_SCHEMA)
-    dummy = URIRef(EX + "SharedRoles")
-    assert set(g.subjects(SH.targetClass, None)) == {dummy}
-    assert (dummy, SH.targetClass, URIRef(EX + "Shared")) in g
-    assert (dummy, SH.closed, rdflib.Literal(False)) in g
-    branches = list(Collection(g, g.value(dummy, SH["or"])))
+def test_several_parents_get_a_role_union_shape_that_lists_every_role(tmp_path, caplog):
+    g = shapes(tmp_path, ROLE_UNION_SCHEMA)
+    union = URIRef(EX + "SharedRoles")
+    assert set(g.subjects(SH.targetClass, None)) == {union}
+    assert (union, SH.targetClass, URIRef(EX + "Shared")) in g
+    assert (union, SH.closed, rdflib.Literal(False)) in g
+    branches = list(Collection(g, g.value(union, SH["or"])))
     assert {g.value(b, SH.node) for b in branches} == {URIRef(EX + n) for n in "ABC"}
-    assert "dummy shape" in caplog.text
+    assert "role union shape" in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -697,11 +696,248 @@ def test_several_parents_get_a_dummy_shape_that_lists_every_role(tmp_path, caplo
     ],
     ids=["role A", "role B", "subclass of B", "properties of both parents", "no role"],
 )
-def test_dummy_requires_at_least_one_role(tmp_path, data, conforms):
-    assert run(shapes(tmp_path, DUMMY_SCHEMA), data)[0] is conforms
+def test_role_union_requires_at_least_one_role(tmp_path, data, conforms):
+    assert run(shapes(tmp_path, ROLE_UNION_SCHEMA), data)[0] is conforms
 
 
-def test_dummy_shape_name_does_not_clash_with_a_class(tmp_path):
-    schema = DUMMY_SCHEMA.replace("classes:\n", "classes:\n  SharedRoles:\n    slots: [c]\n", 1)
+def test_role_union_shape_name_does_not_clash_with_a_class(tmp_path):
+    schema = ROLE_UNION_SCHEMA.replace("classes:\n", "classes:\n  SharedRoles:\n    slots: [c]\n", 1)
     g = shapes(tmp_path, schema)
     assert (URIRef(EX + "SharedRoles_"), SH.targetClass, URIRef(EX + "Shared")) in g
+
+
+# ---------------------------------------------------------------------------
+# 7. classes sharing a class_uri whose slots share a slot_uri
+#
+# With class_uri names such classes are emitted into one shape. Their slots are grouped per shape, not per
+# class, so that the shape gets one property shape per predicate and a single header.
+# ---------------------------------------------------------------------------
+SHARED_SHAPE_SCHEMA = (
+    HEADER
+    + """
+classes:
+  A:
+    class_uri: ex:A
+  B:
+    class_uri: ex:B
+  Entity:
+    class_uri: prov:Entity
+    slots: [about_a, title]
+  EvaluatedEntity:
+    abstract: true
+    class_uri: prov:Entity
+    slots: [about_b, title]
+slots:
+  about_a:
+    slot_uri: ex:about
+    range: A
+    multivalued: true
+  about_b:
+    slot_uri: ex:about
+    range: B
+    multivalued: true
+  title:
+    slot_uri: dcterms:title
+    range: string
+"""
+)
+SHARED_SHAPE_INSTANCES = "ex:a1 a ex:A . ex:b1 a ex:B . ex:c1 a ex:C . "
+
+
+@pytest.mark.parametrize("use_class_uri_names", [True, False])
+def test_every_class_shape_has_one_closed_value_and_one_ignored_properties_list(tmp_path, use_class_uri_names):
+    g = shapes(tmp_path, SHARED_SHAPE_SCHEMA, use_class_uri_names=use_class_uri_names)
+    class_shapes = [s for s in g.subjects(RDF.type, SH.NodeShape) if not str(s).endswith("Roles")]
+    assert class_shapes
+    for shape in class_shapes:
+        assert len(list(g.objects(shape, SH.closed))) == 1, shape
+        assert len(list(g.objects(shape, SH.ignoredProperties))) == 1, shape
+
+
+def test_class_uri_names_give_classes_sharing_a_class_uri_one_property_shape_per_predicate(tmp_path, caplog):
+    g = shapes(tmp_path, SHARED_SHAPE_SCHEMA, use_class_uri_names=True)
+    entity = URIRef("http://www.w3.org/ns/prov#Entity")
+    # closed only if every class would be; EvaluatedEntity is abstract
+    assert list(g.objects(entity, SH.closed)) == [rdflib.Literal(False)]
+    # about_a and about_b are merged; title, used unchanged by both classes, appears once
+    paths = sorted(str(g.value(p, SH.path)) for p in g.objects(entity, SH.property))
+    assert paths == [EX + "about", "http://purl.org/dc/terms/title"]
+    merges = [r.getMessage() for r in caplog.records if "share slot_uri" in r.getMessage()]
+    assert len(merges) == 1
+    assert "Entity.about_a" in merges[0] and "EvaluatedEntity.about_b" in merges[0]
+    assert "distinct class_uris" in merges[0]
+
+
+@pytest.mark.parametrize("use_class_uri_names", [True, False])
+@pytest.mark.parametrize(
+    ("data", "conforms"),
+    [
+        ("ex:e a prov:Entity ; ex:about ex:a1, ex:b1 .", True),
+        ('ex:e a prov:Entity ; ex:about "not a node" .', False),
+    ],
+    ids=["values of both slots", "literal value"],
+)
+def test_classes_sharing_a_class_uri_and_a_slot_uri_validate(tmp_path, use_class_uri_names, data, conforms):
+    g = shapes(tmp_path, SHARED_SHAPE_SCHEMA, use_class_uri_names=use_class_uri_names)
+    assert run(g, SHARED_SHAPE_INSTANCES + data)[0] is conforms
+
+
+def test_class_uri_names_reject_a_value_of_neither_range(tmp_path):
+    # with native names ranges are checked with sh:node only, which does not look at the value's type
+    g = shapes(tmp_path, SHARED_SHAPE_SCHEMA, use_class_uri_names=True)
+    conforms, results = run(g, SHARED_SHAPE_INSTANCES + "ex:e a prov:Entity ; ex:about ex:a1, ex:c1 .")
+    assert not conforms
+    assert results == {("e", "Violation")}
+
+
+@pytest.mark.parametrize("use_class_uri_names", [True, False])
+def test_merging_slots_is_warned_about_in_both_modes(tmp_path, caplog, use_class_uri_names):
+    shapes(tmp_path, SLOT_COLLISION_SCHEMA, use_class_uri_names=use_class_uri_names)
+    merges = [r.getMessage() for r in caplog.records if "share slot_uri" in r.getMessage()]
+    assert len(merges) == 1
+    assert "Dataset.is_about_entity" in merges[0] and "Dataset.is_about_activity" in merges[0]
+    assert "may not be what you intended" in merges[0]
+
+
+def test_merged_slot_keeps_both_equals_string_constraints(tmp_path):
+    schema = (
+        HEADER
+        + """
+classes:
+  Thing:
+    class_uri: ex:Thing
+    slots: [code, doi]
+slots:
+  code:
+    slot_uri: dcterms:identifier
+    range: string
+    equals_string: a
+    equals_string_in: [a, b]
+  doi:
+    slot_uri: dcterms:identifier
+    range: string
+"""
+    )
+    g = shapes(tmp_path, schema)
+    # as for an unmerged slot, equals_string and equals_string_in each become an sh:in on code's branch
+    assert max(len(list(g.objects(node, SH["in"]))) for node in set(g.subjects(SH["in"], None))) == 2
+
+
+# ---------------------------------------------------------------------------
+# 8. slots on rdf:type (linkml#3931)
+# ---------------------------------------------------------------------------
+RDF_PREFIX = "  rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns#\n"
+RDF_TYPE_SCHEMA = HEADER.replace("prefixes:\n", "prefixes:\n" + RDF_PREFIX, 1) + (
+    """
+classes:
+  Thing:
+    class_uri: ex:Thing
+    slots: [rdf_type]
+  DefinedTerm:
+    class_uri: ex:DefinedTerm
+slots:
+  rdf_type:
+    slot_uri: rdf:type
+    range: DefinedTerm
+"""
+)
+RDF_TYPE_INSTANCES = "ex:term1 a ex:DefinedTerm . ex:term2 a ex:DefinedTerm . "
+
+
+@pytest.mark.parametrize("use_class_uri_names", [True, False])
+@pytest.mark.parametrize(
+    ("data", "conforms"),
+    [
+        ("ex:x a ex:Thing .", True),
+        ("ex:x a ex:Thing, ex:term1 .", True),
+        ("ex:x a ex:Thing, ex:term1, ex:term2 .", False),
+    ],
+    ids=["own class only", "one explicit type", "two explicit types for a single-valued slot"],
+)
+def test_rdf_type_slot_accepts_the_nodes_own_class(tmp_path, use_class_uri_names, data, conforms):
+    g = shapes(tmp_path, RDF_TYPE_SCHEMA, use_class_uri_names=use_class_uri_names)
+    assert run(g, RDF_TYPE_INSTANCES + data)[0] is conforms
+
+
+def test_rdf_type_slot_rejects_a_type_outside_its_range(tmp_path):
+    g = shapes(tmp_path, RDF_TYPE_SCHEMA, use_class_uri_names=True)
+    assert run(g, "ex:x a ex:Thing, ex:Other .")[0] is False
+
+
+# ---------------------------------------------------------------------------
+# 9. a class relaxing the root of its group (slot_usage)
+#
+# slot_usage lets a subclass accept more than its parent. The root's targeted shape would then reject valid
+# nodes of the subclass, so such a group gets a role union shape instead of a targeted root.
+# ---------------------------------------------------------------------------
+STRICT_ACTIVITY_CLASSES = """
+classes:
+  Activity:
+    class_uri: prov:Activity
+    slots: [title]
+  StrictActivity:
+    is_a: Activity
+    class_uri: prov:Activity
+    slot_usage:
+      title:
+        required: true
+"""
+TITLE_SLOT = """
+slots:
+  title:
+    slot_uri: dcterms:title
+    range: string
+"""
+RELAXED_ROLE_SCHEMA = (
+    HEADER
+    + STRICT_ACTIVITY_CLASSES
+    + """
+  RelaxedActivity:
+    is_a: StrictActivity
+    class_uri: prov:Activity
+    slot_usage:
+      title:
+        required: false
+        multivalued: true
+  Dataset:
+    class_uri: dcat:Dataset
+    slots: [was_generated_by]
+"""
+    + TITLE_SLOT
+    + """
+  was_generated_by:
+    slot_uri: prov:wasGeneratedBy
+    range: RelaxedActivity
+"""
+)
+
+
+def test_a_role_that_only_tightens_its_parent_keeps_the_parent_targeted(tmp_path, caplog):
+    g = shapes(tmp_path, HEADER + STRICT_ACTIVITY_CLASSES + TITLE_SLOT)
+    assert set(g.subjects(SH.targetClass, None)) == {URIRef(EX + "Activity")}
+    assert "loosens" not in caplog.text
+
+
+def test_a_role_relaxing_its_parent_gets_a_role_union_shape(tmp_path, caplog):
+    g = shapes(tmp_path, RELAXED_ROLE_SCHEMA)
+    union = URIRef(EX + "ActivityRoles")
+    assert set(g.subjects(SH.targetClass, None)) == {union, URIRef(EX + "Dataset")}
+    branches = list(Collection(g, g.value(union, SH["or"])))
+    assert {g.value(b, SH.node) for b in branches} == {
+        URIRef(EX + name) for name in ("Activity", "StrictActivity", "RelaxedActivity")
+    }
+    assert "['RelaxedActivity'] accept more than their parent Activity" in caplog.text
+    assert "loosens slot title" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("data", "conforms"),
+    [
+        ('ex:d a dcat:Dataset ; prov:wasGeneratedBy ex:a . ex:a a prov:Activity ; dcterms:title "1", "2" .', True),
+        ('ex:a a prov:Activity ; dcterms:title "one" .', True),
+        ('ex:a a prov:Activity ; ex:other "x" .', False),
+    ],
+    ids=["relaxed role with two titles", "plain activity", "property of none of the classes"],
+)
+def test_a_role_relaxing_its_parent_validates_its_own_nodes(tmp_path, data, conforms):
+    assert run(shapes(tmp_path, RELAXED_ROLE_SCHEMA), data)[0] is conforms

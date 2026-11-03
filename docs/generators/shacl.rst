@@ -84,6 +84,29 @@ Example Output:
         shacl:targetClass <https://w3id.org/linkml/tests/kitchen_sink/Person> .
 
 
+Classes and slots that share a URI
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+LinkML tells classes and slots apart by name, but RDF only sees their URIs. When several classes share a
+``class_uri``, or several slots of a class share a ``slot_uri``, a validator cannot tell which of them a node
+or a triple belongs to. The generator then emits shapes that hold for all of them at once, and logs a warning
+because this is often not intended:
+
+* **Slots sharing a slot_uri** become a single property shape with ``sh:or`` over their ranges. Each slot keeps
+  its own cardinality as a qualified count (``sh:qualifiedValueShape``), and its own value constraints such as
+  ``pattern``. This applies with both naming modes.
+* **Classes sharing a class_uri** are emitted into a single shape with ``--use-class-uri-names`` (the default).
+  With ``--use-native-names`` every class keeps its own shape, but only the class without a parent in the group
+  keeps ``sh:targetClass``; the others become *role shapes*, checked where a slot's range names them. A group of
+  unrelated classes, or one in which a subclass relaxes its parent through ``slot_usage``, gets a *role union
+  shape* (``<name>Roles``) instead: it targets the ``class_uri`` and accepts a node conforming to any of the
+  classes.
+* **Slots on rdf:type** accept the node's own class assertion besides their range, and do not count it.
+
+To get full validation for each element, give them distinct URIs. See :class:`ShaclGenerator` below for the
+details.
+
+
 Command Line
 ^^^^^^^^^^^^
 

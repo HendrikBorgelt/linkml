@@ -1,7 +1,5 @@
-import copy
 import logging
 import os
-import re
 import string
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,22 +9,31 @@ from jsonasobj2 import JsonObj, as_dict
 from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.collection import Collection
 from rdflib.namespace import RDF, RDFS, SH, XSD
+from rdflib.term import Node
 
 from linkml._version import __version__
 from linkml.generators.common.subproperty import get_subproperty_values, is_uri_range
 from linkml.generators.shacl.shacl_data_type import ShaclDataType
 from linkml.generators.shacl.shacl_ifabsent_processor import ShaclIfAbsentProcessor
+from linkml.generators.shacl.shacl_shared_uris import (
+    NodeShapeSpec,
+    PropertyGroup,
+    RolePlan,
+    SharedClassUriGroup,
+    cardinality_bounds,
+    group_slots_by_path,
+    plan_role_shapes,
+    relaxed_constraints,
+    role_union_shape_name,
+    shape_slots,
+    slot_path,
+    slot_ranges,
+    slot_value_key,
+)
 from linkml.utils.generator import Generator, shared_arguments
 from linkml.utils.language_tags import LanguageTagResolver
-from linkml_runtime.linkml_model.meta import (
-    AnonymousSlotExpression,
-    ClassDefinition,
-    ElementName,
-    PresenceEnum,
-    SlotDefinition,
-)
-from linkml_runtime.utils.formatutils import underscore
-from linkml_runtime.utils.rdf_canonicalize import canonicalize_rdf_graph, _deterministic_fallback_serialize
+from linkml_runtime.linkml_model.meta import ClassDefinition, ElementName, PresenceEnum, SlotDefinition
+from linkml_runtime.utils.rdf_canonicalize import canonicalize_rdf_graph
 from linkml_runtime.utils.yamlutils import TypedNode, extended_float, extended_int, extended_str
 
 logger = logging.getLogger(__name__)
@@ -34,20 +41,6 @@ logger = logging.getLogger(__name__)
 
 MESSAGE_TEMPLATE_FIELDS = ("name", "title", "description", "comments", "class", "path")
 """Placeholders permitted in ``--message-template`` (see :attr:`ShaclGenerator.message_template`)."""
-
-RECOMMENDED_MODES = ("ignore", "warning")
-"""Values accepted by :attr:`ShaclGenerator.recommended`."""
-
-MEMBER_VALUE_ATTRIBUTES = (
-    "pattern",
-    "equals_string",
-    "equals_string_in",
-    "equals_number",
-    "minimum_value",
-    "maximum_value",
-    "subproperty_of",
-)
-"""Value constraints of a slot; in a merged shape they stay in the `sh:or` branch of their own slot."""
 
 
 def _validate_message_template(template: str) -> None:
@@ -88,65 +81,73 @@ class ShaclGenerator(Generator):
     SHACL shapes are used to validate RDF data. Each LinkML class is converted
     to a ``sh:NodeShape`` with property constraints derived from the class's slots.
 
-    Shape Naming Modes
-    ------------------
-    The generator supports two naming modes controlled by ``use_class_uri_names``:
+    **Shape naming modes.** The generator supports two naming modes controlled by ``use_class_uri_names``:
 
     **Default mode** (``use_class_uri_names=True``):
         Shapes are named using the ``class_uri``. If multiple LinkML classes share
-        the same ``class_uri``, their properties are merged into a single shape.
-        This is the traditional RDF-centric behavior.
+        the same ``class_uri``, they are emitted into a single shape.
+        This is the long-standing LinkML default: the class IRI doubles as the shape
+        IRI and as the shape's ``sh:targetClass``.
 
-        Example: LinkML classes ``Entity`` and ``EvaluatedEntity`` both with
-        ``class_uri prov:Entity`` produce a single shape ``<prov:Entity>``.
+        Example: LinkML classes ``Customer`` and ``VipCustomer`` (``is_a: Customer``), both
+        with ``class_uri schema:Person``, produce a single shape ``<schema:Person>``.
 
     **Native names mode** (``use_class_uri_names=False``):
         Shapes are named using the native LinkML class name from the schema.
         Each LinkML class produces a distinct shape, even if they share a ``class_uri``.
-        The ``sh:targetClass`` still correctly points to the ``class_uri``.
 
-        Example: The same two classes produce two shapes, each with
-        ``sh:targetClass prov:Entity``.
+        Example: The same two classes produce two shapes, ``Customer`` and ``VipCustomer``.
+        ``Customer`` keeps ``sh:targetClass schema:Person``; ``VipCustomer`` becomes a role
+        shape, checked where a slot's range is ``VipCustomer`` (see below).
 
     Use native names mode when multiple LinkML classes intentionally map to the
     same external ontology class and you need distinct validation shapes per class.
     See `#3011 <https://github.com/linkml/linkml/issues/3011>`_ for background.
 
-    Shared ``class_uri`` (role shapes)
-    ----------------------------------
-    Classes that share a ``class_uri`` (e.g. ``Activity`` and ``DataGeneratingActivity``
-    both on ``prov:Activity``) cannot all target that class: an instance would have to
-    satisfy every shape at once, which is unsatisfiable for closed shapes. For each such
-    group the generator
+    **Classes sharing a class_uri.** RDF cannot tell such classes apart: a node typed with the ``class_uri`` is
+    checked against every shape that targets it. With class_uri names the classes are emitted into one shape,
+    with one ``sh:targetClass``, one property shape per predicate (see below) and the ``sh:ignoredProperties`` of
+    all of them; it is closed only if each of the classes would be.
 
-    * gives every class in the group its own (native-name) shape,
-    * if the group has a single *root* (the class without an ancestor in the group), keeps
-      ``sh:targetClass`` only on that root,
-    * if the group has two or more roots, targets none of the classes and adds a *dummy* shape
-      ``<local name of the class_uri>Roles`` instead: it targets the class, is open, and requires every
-      such node to satisfy at least one of the group's role shapes (``sh:or``). A warning is logged,
-      because such a structure is usually built by accident,
-    * emits the target-less *role* shapes only where a slot's range names them, as
-      ``sh:class <class_uri>`` plus ``sh:node <role shape>``.
+    With native names, separate closed shapes with the same target could never all be satisfied, so only the
+    group's *root* (the class without an ancestor in the group) keeps ``sh:targetClass``. The other classes
+    become *role shapes*: shapes without a target, checked only where a slot's range names them, through
+    ``sh:class <class_uri>`` plus ``sh:node <role shape>``. The root's shape then applies to every node of the
+    ``class_uri``. So if the group has several roots, or a class relaxes the root (``slot_usage`` lets a subclass
+    accept more than its parent), none of its classes is targeted; a *role union shape*
+    ``<local name of the class_uri>Roles`` targets the ``class_uri`` instead and requires a node to conform to at
+    least one of the group's shapes. Each of these cases is logged as a warning.
 
-    This only applies with native names. With class_uri names such classes are merged into one shape.
+    **Slots sharing a slot_uri.** A property shape checks every value on its path, whichever LinkML slot the
+    value was meant for. Separate property shapes for slots sharing a ``slot_uri`` would therefore contradict
+    each other by design: with different ranges, every value fails the shapes of the other slots, and each
+    slot's ``sh:maxCount`` counts the other slots' values too. So slots of a shape that share a ``slot_uri`` are
+    emitted as one property shape, with ``sh:or`` over their ranges, and each slot keeps its own cardinality as
+    a qualified count (``sh:qualifiedValueShape``). This is logged as a warning, as it is often a modelling
+    accident.
 
-    Shared ``slot_uri``
-    -------------------
-    Slots of one class that share a ``slot_uri`` are merged into one property shape with
-    ``sh:or`` over their ranges; their individual cardinalities are kept as
-    ``sh:qualifiedValueShape`` constraints.
+    A slot with ``slot_uri: rdf:type`` shares its predicate with the node's own class assertion. Its property
+    shape therefore also accepts the node's own types, and does not count them
+    (`#3931 <https://github.com/linkml/linkml/issues/3931>`_).
 
-    Recommended slots
-    -----------------
-    With ``recommended="warning"``, slots marked ``recommended: true`` are emitted as
-    ``sh:Warning`` constraints in separate ``...Recommendations`` shapes. Recommendations of
-    target-less role shapes are reached through the slot that references them.
+    **Recommended slots.** ``recommended: true`` marks a slot that should be filled, but whose absence is not an
+    error. With ``recommended_warnings``, such slots become constraints with ``sh:severity sh:Warning``. The
+    option is off by default, because SHACL reports ``sh:conforms false`` for any result, warnings included.
+
+    The warnings cannot sit in the class shapes themselves. A node conforms to a shape it is checked against
+    through ``sh:node`` (or ``sh:or``, ``sh:not``, ...) only if that check produces no result at all, so a
+    warning there would turn into a violation of the referencing shape. Each class with recommended slots
+    therefore gets a separate ``<shape>Recommendations`` shape, targeted like its class shape. This matters
+    most with native names: class ranges are checked with ``sh:node`` there, so class shapes are nested
+    wherever a class is used as a range. With class_uri names, ranges are checked with ``sh:class`` and nothing
+    is nested, but the same layout is used for consistency. Role shapes have no target, so their
+    recommendations are checked through the slots that reference them: the referencing class's recommendations
+    shape points (``sh:node``) at the role's recommendations, for the values of that slot only.
     """
 
     # ClassVars
     closed: bool = True
-    """True means add 'sh:closed=true' to all shapes, except of mixin shapes and shapes, that have parents"""
+    """True means add 'sh:closed=true' to all shapes, except for the shapes of mixins and abstract classes"""
     suffix: str = None
     """parameterized suffix to be appended. No suffix per default."""
     include_annotations: bool = False
@@ -161,7 +162,8 @@ class ShaclGenerator(Generator):
     will be merged into a single shape.
 
     If False: Shape URIs use native LinkML class names. Each class gets a distinct shape
-    even when sharing class_uri. The --suffix option still works in either mode.
+    even when sharing class_uri; of such classes only one keeps ``sh:targetClass`` (see the
+    class documentation). The --suffix option still works in either mode.
     """
     expand_subproperty_of: bool = True
     """If True, expand subproperty_of to sh:in constraints with slot descendants"""
@@ -211,13 +213,10 @@ class ShaclGenerator(Generator):
     See `W3C SHACL §5 <https://www.w3.org/TR/shacl/#sparql-constraints>`_
     and `linkml/linkml#2464 <https://github.com/linkml/linkml/issues/2464>`_.
     """
-    recommended: str = "ignore"
-    """How ``recommended: true`` slots are handled: ``ignore`` (default) or ``warning``.
-
-    With ``warning``, each recommended slot becomes a ``sh:severity sh:Warning`` constraint in a
-    separate ``<shape>Recommendations`` node shape. They are kept out of the hard shapes because a
-    node only conforms to a nested shape (``sh:node``, ``sh:or``, ...) if it yields no results at
-    all, whatever their severity.
+    recommended_warnings: bool = False
+    """Emit slots marked ``recommended: true`` as ``sh:Warning`` constraints, in separate
+    ``<shape>Recommendations`` shapes. Off by default; see *Recommended slots* in the class
+    documentation for why, and for how the shapes are built.
     """
 
     include_range_class_descendants: bool = False
@@ -227,6 +226,9 @@ class ShaclGenerator(Generator):
     ``SubstanceSample`` (``SIO:001378``) is rejected where the range is ``EvaluatedEntity`` (``prov:Entity``)
     unless it is also typed ``prov:Entity``. With this option ``sh:class`` becomes an ``sh:or`` over the range
     class and all of its descendants (``is_a`` and mixins).
+
+    With native names, ranges are checked with ``sh:node`` and only the role shapes of classes sharing a
+    ``class_uri`` get ``sh:class`` too, so the option only affects those.
     """
 
     generatorname = os.path.basename(__file__)
@@ -252,13 +254,9 @@ class ShaclGenerator(Generator):
         # once here; per-element tags are validated lazily, with at most one
         # warning per distinct malformed tag.
         self._language_resolver = LanguageTagResolver(self.default_language)
-        self._collided_classes: set[str] = set()
-        self._untargeted_classes: set[str] = set()
-        self._dummy_groups: dict[str, list[str]] = {}
-        self._cut_references: set[tuple[str, str]] = set()
+        # Role shapes of classes sharing a class_uri; worked out per schema in as_graph()
+        self._roles = RolePlan()
         super().__post_init__()
-        if self.recommended not in RECOMMENDED_MODES:
-            raise ValueError(f"recommended must be one of {RECOMMENDED_MODES}, not {self.recommended!r}")
         self.message_template = (self.message_template or "").strip() or None
         if self.message_template is not None:
             _validate_message_template(self.message_template)
@@ -273,695 +271,502 @@ class ShaclGenerator(Generator):
     def serialize(self, **args) -> str:
         g = self.as_graph()
         fmt = "turtle" if self.format in ["owl", "ttl"] else self.format
-        return _deterministic_fallback_serialize(g, fmt)
+        return canonicalize_rdf_graph(g, output_format=fmt)
 
     def as_graph(self) -> Graph:
+        """Build the SHACL shapes graph.
+
+        One node shape is added per shape IRI (see :meth:`_node_shapes`), then the role union shapes and, with
+        :attr:`recommended_warnings`, the recommendation shapes.
+        """
         sv = self.schemaview
         g = Graph()
         g.bind("sh", SH)
-
-        ifabsent_processor = ShaclIfAbsentProcessor(sv)
-
         for pfx in self.schema.prefixes.values():
             g.bind(str(pfx.prefix_prefix), pfx.prefix_reference)
 
-        self._analyze_class_collisions()
+        class_names = list(sv.all_classes(imports=not self.exclude_imports))
+        self._roles = RolePlan() if self.use_class_uri_names else plan_role_shapes(sv, class_names)
+        self._warn_about_role_groups()
 
-        for c in sv.all_classes(imports=not self.exclude_imports).values():
+        ifabsent_processor = ShaclIfAbsentProcessor(sv)
+        node_shapes = self._node_shapes()
+        for shape in node_shapes:
+            self._add_node_shape(g, shape, ifabsent_processor)
+        self._add_role_union_shapes(g)
+        if self.recommended_warnings:
+            self._add_recommendation_shapes(g, node_shapes)
+        return g
 
-            def shape_pv(p, v):
-                if v is not None:
-                    g.add((class_uri_with_suffix, p, v))
+    # -------------------------------------------------------------------
+    # Node shapes
+    # -------------------------------------------------------------------
 
-            class_uri = URIRef(sv.get_uri(c, expand=True))
-            class_uri_with_suffix = self._shape_uri(c.name)
-            shape_pv(RDF.type, SH.NodeShape)
-            if c.name not in self._untargeted_classes:
-                shape_pv(SH.targetClass, class_uri)
+    def _node_shapes(self) -> list[NodeShapeSpec]:
+        """The node shapes to emit: classes grouped by shape IRI, with the slots of each shape grouped by predicate.
 
-            if self.closed:
-                if c.mixin or c.abstract:
-                    shape_pv(SH.closed, Literal(False))
-                else:
-                    shape_pv(SH.closed, Literal(True))
-            else:
-                shape_pv(SH.closed, Literal(False))
-            if c.title is not None:
+        With class_uri names, classes sharing a ``class_uri`` share a shape IRI and are emitted into one shape.
+        Their slots are combined (see :func:`shape_slots`), so that the shape still has one property shape per
+        predicate. With native names every class has a shape of its own.
+        """
+        sv = self.schemaview
+        classes_by_shape: dict[URIRef, list[ClassDefinition]] = {}
+        for cls in sv.all_classes(imports=not self.exclude_imports).values():
+            classes_by_shape.setdefault(self._shape_uri(cls.name), []).append(cls)
+        return [
+            NodeShapeSpec(uri, classes, group_slots_by_path(sv, shape_slots(sv, [cls.name for cls in classes])))
+            for uri, classes in classes_by_shape.items()
+        ]
+
+    def _shape_uri(self, class_name: ElementName) -> URIRef:
+        """IRI of the node shape of class *class_name*: its ``class_uri`` or, with native names, its native IRI.
+
+        The suffix is appended in both cases.
+        """
+        uri = self.schemaview.get_uri(class_name, expand=True, native=not self.use_class_uri_names)
+        return URIRef(uri + (self.suffix or ""))
+
+    def _is_closed(self, cls: ClassDefinition) -> bool:
+        """Whether *cls* on its own gets a closed shape: with :attr:`closed`, unless it is a mixin or abstract."""
+        return bool(self.closed and not cls.mixin and not cls.abstract)
+
+    def _add_node_shape(self, g: Graph, shape: NodeShapeSpec, ifabsent_processor: ShaclIfAbsentProcessor) -> None:
+        """Add the node shape described by *shape*, with one property shape per predicate and its classes' rules.
+
+        A shape of several classes is closed only if each of the classes would be, and its
+        ``sh:ignoredProperties`` combine theirs.
+        """
+        sv = self.schemaview
+        shape_pv = _triple_adder(g, shape.uri)
+        shape_pv(RDF.type, SH.NodeShape)
+        shape_pv(SH.closed, Literal(all(self._is_closed(cls) for cls in shape.classes)))
+        shape_pv(SH.ignoredProperties, self._build_ignored_properties(g, shape.classes))
+        for cls in shape.classes:
+            if cls.name not in self._roles.role_classes:
+                shape_pv(SH.targetClass, URIRef(sv.get_uri(cls, expand=True)))
+            if cls.title is not None:
                 # Use rdfs:label for NodeShape titles per SHACL spec.
                 # sh:name has rdfs:domain of sh:PropertyShape. See issue #3059.
-                shape_pv(RDFS.label, Literal(c.title, lang=self._resolve_language(c)))
-            if c.description is not None:
+                shape_pv(RDFS.label, Literal(cls.title, lang=self._resolve_language(cls)))
+            if cls.description is not None:
                 # Use rdfs:comment for NodeShape descriptions per SHACL spec.
                 # sh:description has rdfs:domain of sh:PropertyShape, so using it
                 # on NodeShapes causes RDFS-aware validators to incorrectly infer
                 # the NodeShape is also a PropertyShape. See issue #3059.
-                shape_pv(RDFS.comment, Literal(c.description, lang=self._resolve_language(c)))
+                shape_pv(RDFS.comment, Literal(cls.description, lang=self._resolve_language(cls)))
+            if cls.annotations and self.include_annotations:
+                self._add_annotations(shape_pv, cls)
 
-            shape_pv(SH.ignoredProperties, self._build_ignored_properties(g, c))
+        for order, group in enumerate(shape.property_groups):
+            if group.is_merged:
+                self._warn_about_merged_slots(shape, group)
+            implicit_types = self._implicit_type_uris(shape.classes) if group.path == RDF.type else None
+            self._add_property_shape(g, shape.uri, group, order, implicit_types, ifabsent_processor)
 
-            if c.annotations and self.include_annotations:
-                self._add_annotations(shape_pv, c)
-            order = 0
-            for slot_uri, members in self._slots_by_uri(c):
-                s = self._merge_slots(c, slot_uri, members) if len(members) > 1 else members[0]
-                # A slot with slot_uri rdf:type shares its predicate with the node's own class-typing
-                # triple (class_uri); a plain property shape on it would constrain that triple as well.
-                own_types = self._own_types(c) if slot_uri == RDF.type else None
-                pnode = BNode()
-                shape_pv(SH.property, pnode)
+        if self.emit_rules:
+            for cls in shape.classes:
+                self._add_rules(g, shape.uri, cls)
 
-                def prop_pv(p, v):
-                    if v is not None:
-                        g.add((pnode, p, v))
+    def _build_ignored_properties(self, g: Graph, classes: list[ClassDefinition]) -> BNode:
+        """``sh:ignoredProperties`` of a node shape: ``rdf:type`` and the properties that only subclasses have.
 
-                def prop_pv_literal(p, v):
-                    if v is not None:
-                        g.add((pnode, p, Literal(v)))
-
-                def prop_pv_text(p, v):
-                    if v is not None:
-                        g.add((pnode, p, Literal(v, lang=self._resolve_language(s))))
-
-                prop_pv(SH.path, slot_uri)
-                prop_pv_literal(SH.order, order)
-                order += 1
-                prop_pv_text(SH.name, s.title)
-                prop_pv_text(SH.description, s.description)
-
-                # sh:message from a user template. The template is validated once in
-                # __post_init__, so expansion here cannot raise. The message is a single
-                # template string, so it is tagged with the generator default language
-                # only (via _resolve_language(None)) and ignores per-slot in_language.
-                if self.message_template is not None:
-                    msg_text = self.message_template.format(
-                        name=s.name,
-                        title=s.title or s.name,
-                        description=s.description or "",
-                        comments="; ".join(s.comments) if s.comments else "",
-                        **{"class": c.name},
-                        path=str(slot_uri),
-                    ).strip()
-                    if msg_text:
-                        g.add((pnode, SH.message, Literal(msg_text, lang=self._resolve_language(None))))
-                min_count, max_count = self._cardinality_bounds(s)
-                prop_pv_literal(SH.minCount, min_count)
-                prop_pv_literal(SH.maxCount, max_count)
-                if own_types:
-                    self._qualify_type_counts(g, pnode, own_types)
-                prop_pv_literal(SH.minInclusive, s.minimum_value)
-                prop_pv_literal(SH.maxInclusive, s.maximum_value)
-
-                all_classes = sv.all_classes()
-                if s.any_of:
-                    # It is not allowed to use any of and equals_string or equals_string_in in one
-                    # slot definition, as both are mapped to sh:in in SHACL
-                    if s.equals_string or s.equals_string_in:
-                        error = "'equals_string'/'equals_string_in' and 'any_of' are mutually exclusive"
-                        raise ValueError(f"{TypedNode.yaml_loc(str(s), suffix='')} {error}")
-
-                    or_node = BNode()
-                    prop_pv(SH["or"], or_node)
-                    Collection(g, or_node, self._any_of_shapes(g, s, members, c.name))
-                else:
-                    prop_pv_literal(SH.hasValue, s.equals_number)
-                    r = s.range
-                    if s.equals_string or s.equals_string_in:
-                        # Check if range is "string" as this is mandatory for "equals_string" and "equals_string_in"
-                        if r != "string":
-                            raise ValueError(
-                                f"slot: \"{slot_uri}\" - 'equals_string' and 'equals_string_in'"
-                                f" require range 'string' and not '{r}'"
-                            )
-
-                    if r in all_classes:
-                        cls_def = sv.get_class(r)
-                        is_any = cls_def and getattr(cls_def, "class_uri", None) == "linkml:Any"
-                        if own_types:
-                            self._add_type_slot_range(g, prop_pv, r, own_types, c.name)
-                        else:
-                            self._add_class(g, prop_pv, r, c.name)
-                        if not is_any:
-                            if sv.get_identifier_slot(r) is not None:
-                                prop_pv(SH.nodeKind, SH.IRI)
-                            else:
-                                prop_pv(SH.nodeKind, SH.BlankNodeOrIRI)
-                    elif r in sv.all_types():
-                        self._add_type(prop_pv, r)
-                    elif r in sv.all_enums():
-                        self._add_enum(g, prop_pv, r)
-                    else:
-                        add_simple_data_type(prop_pv, r)
-                    if s.pattern:
-                        prop_pv(SH.pattern, Literal(s.pattern))
-                    if s.equals_string:
-                        # Map equal_string and equal_string_in to sh:in
-                        self._and_equals_string(g, prop_pv, [s.equals_string])
-                    if s.equals_string_in:
-                        # Map equal_string and equal_string_in to sh:in
-                        self._and_equals_string(g, prop_pv, s.equals_string_in)
-                    if self.expand_subproperty_of and s.subproperty_of:
-                        # Map subproperty_of to sh:in with slot descendants
-                        self._add_subproperty_constraint(g, prop_pv, s)
-
-                if s.annotations and self.include_annotations:
-                    self._add_annotations(prop_pv, s)
-
-                default_value = ifabsent_processor.process_slot(s, c)
-                if default_value:
-                    prop_pv(SH.defaultValue, default_value)
-
-                if len(members) > 1:
-                    self._add_member_cardinalities(g, class_uri_with_suffix, slot_uri, members, c.name)
-
-            if self.emit_rules:
-                self._add_rules(g, class_uri_with_suffix, c)
-
-        self._add_dummy_shapes(g)
-
-        if self.recommended == "warning":
-            self._add_recommendations(g)
-
-        return g
+        A closed shape rejects every property it does not list; ignoring the properties of ``is_a`` subclasses
+        lets an instance of a subclass pass the shape of its parent.
+        """
+        sv = self.schemaview
+        ignored = {RDF.type}
+        for cls in classes:
+            own_properties = {URIRef(sv.get_uri(slot, expand=True)) for slot in sv.class_slots(cls.name)}
+            subclass_properties = {
+                URIRef(sv.get_uri(slot, expand=True))
+                for subclass in sv.class_descendants(cls.name, imports=True, mixins=False, reflexive=False)
+                for slot in sv.class_slots(subclass)
+            }
+            ignored |= subclass_properties - own_properties
+        return _rdf_list(g, sorted(ignored, key=str))
 
     # -------------------------------------------------------------------
-    # Shared class_uri: role shapes
+    # Property shapes
     # -------------------------------------------------------------------
 
-    def _analyze_class_collisions(self) -> None:
-        """Find classes sharing a ``class_uri`` and decide which of them keep ``sh:targetClass``.
+    def _add_property_shape(
+        self,
+        g: Graph,
+        shape_uri: URIRef,
+        group: PropertyGroup,
+        order: int,
+        implicit_types: list[URIRef] | None,
+        ifabsent_processor: ShaclIfAbsentProcessor,
+    ) -> None:
+        """Add the property shape of *group*: a single slot, or several slots merged because they share a predicate.
 
-        Only applies with native names (``use_class_uri_names=False``), where every LinkML class gets a shape
-        of its own. With class_uri names, classes sharing a ``class_uri`` end up in one merged shape, which is
-        valid SHACL, so nothing is changed there.
-
-        Sets :attr:`_collided_classes` (all classes in a group of two or more), :attr:`_untargeted_classes`
-        (the collided classes that get no ``sh:targetClass``) and :attr:`_dummy_groups`. Separate shapes with
-        the same target are conjoined, and being closed they could never all be satisfied.
-
-        Within a group the *roots* are the classes without an ancestor (``is_a`` or mixin) in the group.
-
-        * One root: it keeps the target, every other class becomes a target-less role shape.
-        * Two or more roots: no class is targeted. A dummy shape targets the class instead and requires a
-          node to satisfy at least one role of the group (see :meth:`_add_dummy_shapes`), which avoids having to
-          choose one of the parents. This is usually a modelling accident, so it is warned about.
-
-        Schemas without shared class URIs produce no warning at all.
-        """
-        self._collided_classes = set()
-        self._untargeted_classes = set()
-        self._dummy_groups = {}
-        if self.use_class_uri_names:
-            self._warn_slot_collisions()
-            self._find_recursive_references()
-            return
-        sv = self.schemaview
-        groups: dict[str, list[str]] = {}
-        for name, cls in sv.all_classes(imports=not self.exclude_imports).items():
-            groups.setdefault(sv.get_uri(cls, expand=True), []).append(name)
-
-        for class_uri, names in groups.items():
-            if len(names) < 2:
-                continue
-            self._collided_classes.update(names)
-            members = set(names)
-            roots = [
-                n for n in names if not members & set(sv.class_ancestors(n, imports=True, mixins=True, reflexive=False))
-            ]
-            if len(roots) == 1:
-                self._untargeted_classes.update(members - set(roots))
-                logger.warning(
-                    "Classes %s share class_uri %s. To keep the SHACL shapes satisfiable only %s gets "
-                    "sh:targetClass, the others are role shapes reached through the slots that name them "
-                    "(the previous behaviour targeted every class).",
-                    sorted(names),
-                    class_uri,
-                    roots[0],
-                )
-            else:
-                self._untargeted_classes.update(members)
-                self._dummy_groups[class_uri] = sorted(names)
-                logger.warning(
-                    "Classes %s share class_uri %s without a common parent. None of them gets sh:targetClass; "
-                    "a dummy shape %s targets the class instead and only requires a node to satisfy at least one "
-                    "of the classes %s. This is usually not intended: give the classes a common parent or "
-                    "distinct class_uris.",
-                    sorted(roots),
-                    class_uri,
-                    self._dummy_shape_uri(class_uri),
-                    sorted(names),
-                )
-            self._warn_group_consistency(class_uri, names, roots)
-        self._warn_slot_collisions()
-        self._find_recursive_references()
-
-    def _dummy_shape_uri(self, class_uri: str) -> URIRef:
-        """URI of the dummy shape of the group sharing *class_uri*: ``<local name>Roles`` in the schema's namespace.
-
-        A numeric suffix is added if a class already has that name.
+        :param implicit_types: only for an ``rdf:type`` slot: the class IRIs a node carries as its own type (see
+            :meth:`_implicit_type_uris`). They are accepted as values and not counted.
         """
         sv = self.schemaview
-        local = re.split(r"[#/:]", class_uri.rstrip("#/"))[-1]
-        name = f"{local}Roles"
-        classes = set(sv.all_classes())
-        while name in classes:
-            name += "_"
-        uri = URIRef(sv.expand_curie(f"{sv.schema.default_prefix}:{name}"))
-        return URIRef(uri + self.suffix) if self.suffix else uri
+        s = group.combined_slot()
+        pnode = BNode()
+        g.add((shape_uri, SH.property, pnode))
+        prop_pv = _triple_adder(g, pnode)
 
-    def _add_dummy_shapes(self, g: Graph) -> None:
-        """Add the dummy shape of each group of classes sharing a ``class_uri`` without a common parent.
-
-        The dummy is the only targeted shape for the class: it is open and requires the node to satisfy at
-        least one role shape of the group (all classes of the group are listed, so a node shaped like any
-        of them, subclasses included, passes). It asks for no property of its own.
-        """
-        for class_uri, names in self._dummy_groups.items():
-            dummy = self._dummy_shape_uri(class_uri)
-            g.add((dummy, RDF.type, SH.NodeShape))
-            g.add((dummy, SH.targetClass, URIRef(class_uri)))
-            g.add((dummy, SH.closed, Literal(False)))
-            g.add(
-                (
-                    dummy,
-                    SH.description,
-                    Literal(
-                        f"Generated: the classes {', '.join(names)} share this class and have no common parent; "
-                        "a node must satisfy at least one of their shapes."
-                    ),
-                )
-            )
-            members = []
-            for name in names:
-                member = BNode()
-                g.add((member, SH.node, self._shape_uri(name)))
-                members.append(member)
-            or_node = BNode()
-            Collection(g, or_node, members)
-            g.add((dummy, SH["or"], or_node))
-
-    def _is_closed(self, name: str) -> bool:
-        """Whether the shape generated for *name* is closed (mirrors the rule used in :meth:`as_graph`)."""
-        cls = self.schemaview.get_class(name)
-        return bool(self.closed and not cls.mixin and not cls.abstract)
-
-    def _warn_group_consistency(self, class_uri: str, names: list[str], roots: list[str]) -> None:
-        """Warn about role groups that cannot work as intended.
-
-        * Several unrelated roots that are closed: each rejects the properties of the others.
-        * A subclass that loosens what its parent demands: a node passing the child's shape could fail
-          the parent's, which defeats the idea that a role is a specialisation of its parent.
-        """
-        sv = self.schemaview
-        closed_roots = [r for r in roots if self._is_closed(r)]
-        if len(roots) > 1 and closed_roots:
-            logger.warning(
-                "Classes %s share class_uri %s without a common parent, but %s are closed. A closed shape rejects "
-                "the properties of the other classes; make them abstract or mixins, or generate "
-                "with --non-closed.",
-                sorted(roots),
-                class_uri,
-                sorted(closed_roots),
-            )
-        for name in names:
-            for parent in sv.class_ancestors(name, imports=True, mixins=True, reflexive=False):
-                if parent not in names:
-                    continue
-                parent_slots = {s.name: s for s in sv.class_induced_slots(parent)}
-                for slot in sv.class_induced_slots(name):
-                    if slot.name in parent_slots:
-                        for problem in self._loosened(parent_slots[slot.name], slot):
-                            logger.warning(
-                                "Class %s (role of %s, class_uri %s) loosens slot %s: %s. A node valid for the "
-                                "role may then be invalid for its parent.",
-                                name,
-                                parent,
-                                class_uri,
-                                slot.name,
-                                problem,
-                            )
-
-    def _loosened(self, parent: SlotDefinition, child: SlotDefinition) -> list[str]:
-        """Ways in which *child* demands less than *parent* for the same slot."""
-        sv = self.schemaview
-        problems: list[str] = []
-        if parent.required and not child.required:
-            problems.append("no longer required")
-        if not parent.multivalued and child.multivalued:
-            problems.append("multivalued although the parent allows one value")
-        p_min, p_max = self._cardinality_bounds(parent)
-        c_min, c_max = self._cardinality_bounds(child)
-        if (p_min or 0) > (c_min or 0):
-            problems.append(f"minimum count {c_min or 0} below the parent's {p_min}")
-        if p_max is not None and (c_max is None or c_max > p_max):
-            problems.append(f"maximum count {c_max} above the parent's {p_max}")
-        if parent.range and child.range and parent.range != child.range:
-            allowed = (
-                set(sv.class_descendants(parent.range, imports=True, mixins=True))
-                if sv.get_class(parent.range)
-                else {parent.range}
-            )
-            if child.range not in allowed:
-                problems.append(f"range {child.range} is not {parent.range} or a subclass of it")
-        return problems
-
-    def _warn_slot_collisions(self) -> None:
-        """Warn once per class and property URI when several of its slots share a ``slot_uri``.
-
-        Their property shapes would be conjoined on the same path and, with differing ranges or
-        cardinalities, could never be satisfied, so they are merged into one (see :meth:`_merge_slots`).
-        """
-        for cls_name in self.schemaview.all_classes(imports=not self.exclude_imports):
-            for slot_uri, members in self._slots_by_uri(self.schemaview.get_class(cls_name)):
-                if len(members) > 1 and slot_uri != RDF.type:
-                    logger.warning(
-                        "Class %s: slots %s share slot_uri %s. They are merged into one property shape to keep the "
-                        "SHACL shapes satisfiable (the previous behaviour emitted one conflicting shape each).",
-                        cls_name,
-                        sorted(m.name for m in members),
-                        slot_uri,
-                    )
-
-    def _find_recursive_references(self) -> None:
-        """Find references to role shapes that would make the generated ``sh:node`` shapes recursive.
-
-        Recursive shapes are implementation-defined in SHACL. Role shapes are referenced with ``sh:node``,
-        so a cycle of such references (``A`` has a slot ranging over role ``B`` whose slot ranges over ``A``)
-        is cut at its back-edge: that reference is only checked with ``sh:class``. Targeted classes are
-        visited first, so cycles are cut inside the role shapes rather than at their entry points.
-        """
-        sv = self.schemaview
-        classes = list(sv.all_classes(imports=not self.exclude_imports))
-        references = {
-            name: list(
-                dict.fromkeys(
-                    r
-                    for slot in sv.class_induced_slots(name)
-                    for r in self._slot_ranges(slot)
-                    if r in self._untargeted_classes
-                )
-            )
-            for name in classes
-        }
-        self._cut_references = set()
-        state: dict[str, bool] = {}  # class -> finished
-
-        def visit(name: str) -> None:
-            state[name] = False
-            for r in references[name]:
-                if state.get(r) is False:
-                    self._cut_references.add((name, r))
-                elif r not in state:
-                    visit(r)
-            state[name] = True
-
-        for name in [n for n in classes if n not in self._untargeted_classes] + [
-            n for n in classes if n in self._untargeted_classes
-        ]:
-            if name not in state:
-                visit(name)
-
-    def _shape_uri(self, name: ElementName) -> URIRef:
-        """URI of the node shape generated for class *name* (suffix applied).
-
-        Classes in a ``class_uri`` collision group always use their native name, since the class URI
-        does not identify one of them.
-        """
-        sv = self.schemaview
-        native = not self.use_class_uri_names or name in self._collided_classes
-        uri = URIRef(sv.get_uri(name, expand=True, native=native))
-        return URIRef(uri + self.suffix) if self.suffix else uri
-
-    # -------------------------------------------------------------------
-    # Shared slot_uri: merged property shapes
-    # -------------------------------------------------------------------
-
-    def _induced_slot_uri(self, slot: SlotDefinition) -> URIRef:
-        """Expanded property URI of an induced slot."""
-        sv = self.schemaview
-        # fixed in linkml-runtime 1.1.3
-        if slot.name in sv.element_by_schema_map():
-            return URIRef(sv.get_uri(slot, expand=True))
-        return URIRef(sv.expand_curie(f"{sv.schema.default_prefix}:{underscore(slot.name)}"))
-
-    def _slots_by_uri(self, cls: ClassDefinition) -> list[tuple[URIRef, list[SlotDefinition]]]:
-        """Induced slots of *cls* grouped by property URI, in slot order.
-
-        Slots sharing a ``slot_uri`` end up in one group so that they can be emitted as a single
-        property shape. ``rdf:type`` slots are never grouped; they have their own handling.
-        """
-        groups: dict[URIRef, list[SlotDefinition]] = {}
-        result: list[tuple[URIRef, list[SlotDefinition]]] = []
-        for slot in self.schemaview.class_induced_slots(cls.name):
-            slot_uri = self._induced_slot_uri(slot)
-            if slot_uri == RDF.type or slot_uri not in groups:
-                members: list[SlotDefinition] = []
-                result.append((slot_uri, members))
-                if slot_uri != RDF.type:
-                    groups[slot_uri] = members
-            else:
-                members = groups[slot_uri]
-            members.append(slot)
-        return result
-
-    @staticmethod
-    def _slot_ranges(slot: SlotDefinition) -> list[ElementName]:
-        """Ranges a slot allows: those of its ``any_of`` branches, or its own range."""
-        return [a.range for a in slot.any_of] if slot.any_of else [slot.range]
-
-    def _merge_slots(self, cls: ClassDefinition, slot_uri: URIRef, members: list[SlotDefinition]) -> SlotDefinition:
-        """Combine slots that share *slot_uri* into one slot whose range is the union of theirs.
-
-        The result is multivalued without cardinalities: a value may be of any member's range. The
-        members' own cardinalities are enforced separately (see :meth:`_add_member_cardinalities`).
-        Value constraints (``pattern``, ``equals_string``...) are cleared on the result: they belong to one
-        member and are emitted in that member's own ``sh:or`` branch (see :meth:`_any_of_shapes`).
-        """
-        ranges = list(dict.fromkeys(r for m in members for r in self._slot_ranges(m)))
-        merged = copy.copy(members[0])
-        merged.name = " / ".join(m.name for m in members)
-        merged.title = next((m.title for m in members if m.title), None)
-        merged.description = "; ".join(dict.fromkeys(m.description for m in members if m.description)) or None
-        merged.range = None
-        merged.any_of = [AnonymousSlotExpression(range=r) for r in ranges]
-        merged.multivalued = True
-        merged.required = False
-        merged.identifier = False
-        merged.minimum_cardinality = merged.maximum_cardinality = merged.exact_cardinality = None
-        merged.ifabsent = None
-        for attribute in MEMBER_VALUE_ATTRIBUTES:
-            setattr(merged, attribute, None)
-        return merged
-
-    @staticmethod
-    def _cardinality_bounds(slot: SlotDefinition) -> tuple[int | None, int | None]:
-        """``(min, max)`` number of values of *slot*; ``None`` means unbounded."""
-        if slot.minimum_cardinality is not None:
-            min_count = slot.minimum_cardinality
-        elif slot.exact_cardinality is not None:
-            min_count = slot.exact_cardinality
-        # Identifiers map to the node's IRI rather than a property triple,
-        # so there's no arc to constrain with sh:minCount 1 — emitting it
-        # would cause spurious violations on every instance.
-        elif slot.required and not slot.identifier:
-            min_count = 1
-        else:
-            min_count = None
-        if slot.maximum_cardinality is not None:
-            max_count = slot.maximum_cardinality
-        elif slot.exact_cardinality is not None:
-            max_count = slot.exact_cardinality
-        elif not slot.multivalued:
-            max_count = 1
-        else:
-            max_count = None
-        return min_count, max_count
-
-    def _range_shape(self, g: Graph, r: ElementName, source: str) -> BNode:
-        """Blank node shape holding the constraints for values of range *r* (class, type, enum or datatype)."""
-        sv = self.schemaview
-        node = BNode()
-
-        def node_pv(p, v):
+        def prop_pv_literal(p, v):
             if v is not None:
-                g.add((node, p, v))
+                g.add((pnode, p, Literal(v)))
 
-        if r in sv.all_classes():
-            self._add_class(g, node_pv, r, source)
-        elif r in sv.all_types():
-            self._add_type(node_pv, r)
-        elif r in sv.all_enums():
-            self._add_enum(g, node_pv, r)
+        def prop_pv_text(p, v):
+            if v is not None:
+                g.add((pnode, p, Literal(v, lang=self._resolve_language(s))))
+
+        prop_pv(SH.path, group.path)
+        prop_pv_literal(SH.order, order)
+        prop_pv_text(SH.name, s.title)
+        prop_pv_text(SH.description, s.description)
+
+        # sh:message from a user template. The template is validated once in
+        # __post_init__, so expansion here cannot raise. The message is a single
+        # template string, so it is tagged with the generator default language
+        # only (via _resolve_language(None)) and ignores per-slot in_language.
+        if self.message_template is not None:
+            msg_text = self.message_template.format(
+                name=s.name,
+                title=s.title or s.name,
+                description=s.description or "",
+                comments="; ".join(s.comments) if s.comments else "",
+                **{"class": s.owner},
+                path=str(group.path),
+            ).strip()
+            if msg_text:
+                g.add((pnode, SH.message, Literal(msg_text, lang=self._resolve_language(None))))
+
+        min_count, max_count = cardinality_bounds(s)
+        if implicit_types:
+            self._add_explicit_type_counts(g, pnode, min_count, max_count, implicit_types)
         else:
-            add_simple_data_type(node_pv, r)
-        return node
+            prop_pv_literal(SH.minCount, min_count)
+            prop_pv_literal(SH.maxCount, max_count)
 
-    def _member_shape(self, g: Graph, slot: SlotDefinition, source: str) -> BNode:
-        """Shape matching the values *slot* itself allows: its range (or the union of its ``any_of`` ranges)
-        together with its own value constraints."""
-        shapes = [self._range_shape(g, r, source) for r in self._slot_ranges(slot)]
-        if len(shapes) == 1:
-            node = shapes[0]
+        if s.any_of:
+            # It is not allowed to use any of and equals_string or equals_string_in in one
+            # slot definition, as both are mapped to sh:in in SHACL
+            if s.equals_string or s.equals_string_in:
+                error = "'equals_string'/'equals_string_in' and 'any_of' are mutually exclusive"
+                raise ValueError(f"{TypedNode.yaml_loc(str(s), suffix='')} {error}")
+            prop_pv(SH["or"], _rdf_list(g, self._or_branches(g, group)))
+            prop_pv_literal(SH.minInclusive, s.minimum_value)
+            prop_pv_literal(SH.maxInclusive, s.maximum_value)
         else:
-            node, or_node = BNode(), BNode()
-            Collection(g, or_node, shapes)
-            g.add((node, SH["or"], or_node))
-        self._add_value_constraints(g, node, slot)
-        return node
+            r = s.range
+            if implicit_types and r in sv.all_classes():
+                self._add_rdf_type_slot_range(g, prop_pv, r, implicit_types, s.owner)
+            else:
+                self._add_range(g, prop_pv, r, s.owner)
+            if r in sv.all_classes() and not self._is_linkml_any(r):
+                prop_pv(SH.nodeKind, SH.IRI if sv.get_identifier_slot(r) is not None else SH.BlankNodeOrIRI)
+            self._add_value_constraints(g, pnode, s)
 
-    def _add_value_constraints(self, g: Graph, node: BNode, slot: SlotDefinition) -> None:
-        """Add *slot*'s own value constraints (pattern, bounds, fixed values, ``subproperty_of``) to *node*."""
+        if s.annotations and self.include_annotations:
+            self._add_annotations(prop_pv, s)
 
-        def pv(p, v):
-            g.add((node, p, v))
+        default_value = ifabsent_processor.process_slot(s, sv.get_class(s.owner))
+        if default_value:
+            prop_pv(SH.defaultValue, default_value)
 
+        if group.is_merged:
+            self._add_merged_slot_cardinalities(g, shape_uri, group)
+
+    def _add_value_constraints(self, g: Graph, node: Node, slot: SlotDefinition) -> None:
+        """Add what *slot* demands of each value to *node*: bounds, fixed values, pattern and ``subproperty_of``."""
+        add = _triple_adder(g, node)
         if slot.minimum_value is not None:
-            pv(SH.minInclusive, Literal(slot.minimum_value))
+            add(SH.minInclusive, Literal(slot.minimum_value))
         if slot.maximum_value is not None:
-            pv(SH.maxInclusive, Literal(slot.maximum_value))
+            add(SH.maxInclusive, Literal(slot.maximum_value))
         if slot.equals_number is not None:
-            pv(SH.hasValue, Literal(slot.equals_number))
+            add(SH.hasValue, Literal(slot.equals_number))
         if slot.pattern:
-            pv(SH.pattern, Literal(slot.pattern))
+            add(SH.pattern, Literal(slot.pattern))
         if slot.equals_string or slot.equals_string_in:
             if slot.range != "string":
                 raise ValueError(
                     f"slot: \"{slot.name}\" - 'equals_string' and 'equals_string_in' require range 'string' "
                     f"and not '{slot.range}'"
                 )
-            self._and_equals_string(g, pv, [slot.equals_string] if slot.equals_string else slot.equals_string_in)
+            # equals_string and equals_string_in each map to an sh:in
+            if slot.equals_string:
+                add(SH["in"], _rdf_list(g, [Literal(slot.equals_string)]))
+            if slot.equals_string_in:
+                add(SH["in"], _rdf_list(g, [Literal(value) for value in slot.equals_string_in]))
         if self.expand_subproperty_of and slot.subproperty_of:
-            self._add_subproperty_constraint(g, pv, slot)
+            subproperty_values = self._get_subproperty_values(slot)
+            if subproperty_values:
+                add(SH["in"], _rdf_list(g, subproperty_values))
 
-    def _any_of_shapes(self, g: Graph, slot: SlotDefinition, members: list[SlotDefinition], source: str) -> list[BNode]:
-        """Branches of the ``sh:or`` of *slot*.
+    def _or_branches(self, g: Graph, group: PropertyGroup) -> list[BNode]:
+        """Branches of the ``sh:or`` of *group*'s property shape.
 
-        A plain slot has one branch per ``any_of`` range. A slot merged from *members* has one branch per
-        member, carrying that member's value constraints, so that e.g. a ``pattern`` only applies to values
-        of the slot it was declared on. Members that would give identical branches are emitted once.
+        A single slot has one branch per ``any_of`` range. Merged slots have one branch per slot, which also
+        carries that slot's value constraints, so that a ``pattern`` (say) only applies to the values of the slot
+        that declares it. Slots that would give identical branches get one.
         """
-        if len(members) == 1:
-            return [self._range_shape(g, a.range, source) for a in slot.any_of]
-        seen: set[tuple] = set()
-        branches: list[BNode] = []
-        for member in members:
-            key = (tuple(self._slot_ranges(member)), *(str(getattr(member, a, None)) for a in MEMBER_VALUE_ATTRIBUTES))
-            if key not in seen:
-                seen.add(key)
-                branches.append(self._member_shape(g, member, source))
-        return branches
+        if not group.is_merged:
+            slot = group.slots[0]
+            return [self._range_shape(g, expression.range, slot.owner) for expression in slot.any_of]
+        distinct: dict[tuple, SlotDefinition] = {}
+        for slot in group.slots:
+            distinct.setdefault(slot_value_key(slot), slot)
+        return [self._slot_value_shape(g, slot) for slot in distinct.values()]
 
-    def _add_member_cardinalities(
-        self, g: Graph, shape: URIRef, slot_uri: URIRef, members: list[SlotDefinition], source: str
-    ) -> None:
-        """Enforce each merged slot's own cardinality as a qualified count over the values of its range."""
-        for member in members:
-            min_count, max_count = self._cardinality_bounds(member)
+    def _slot_value_shape(self, g: Graph, slot: SlotDefinition) -> BNode:
+        """Shape of the values *slot* accepts: its range (or its ``any_of`` ranges) and its value constraints."""
+        range_shapes = [self._range_shape(g, r, slot.owner) for r in slot_ranges(slot)]
+        if len(range_shapes) == 1:
+            node = range_shapes[0]
+        else:
+            node = BNode()
+            g.add((node, SH["or"], _rdf_list(g, range_shapes)))
+        self._add_value_constraints(g, node, slot)
+        return node
+
+    def _add_merged_slot_cardinalities(self, g: Graph, shape_uri: URIRef, group: PropertyGroup) -> None:
+        """Keep the cardinality of each merged slot, counting only the values that the slot itself accepts.
+
+        The merged property shape has no counts of its own: each value may belong to any of the slots. Instead,
+        each slot with a cardinality gets a property shape on the same path with ``sh:qualifiedValueShape``
+        (its :meth:`_slot_value_shape`) and ``sh:qualifiedMinCount``/``sh:qualifiedMaxCount``.
+        """
+        for slot in group.slots:
+            min_count, max_count = cardinality_bounds(slot)
             if not min_count and max_count is None:
                 continue
             pnode = BNode()
-            g.add((shape, SH.property, pnode))
-            g.add((pnode, SH.path, slot_uri))
-            g.add((pnode, SH.name, Literal(member.name)))
-            g.add((pnode, SH.qualifiedValueShape, self._member_shape(g, member, source)))
+            g.add((shape_uri, SH.property, pnode))
+            g.add((pnode, SH.path, group.path))
+            g.add((pnode, SH.name, Literal(slot.name)))
+            g.add((pnode, SH.qualifiedValueShape, self._slot_value_shape(g, slot)))
             if min_count:
                 g.add((pnode, SH.qualifiedMinCount, Literal(min_count)))
             if max_count is not None:
                 g.add((pnode, SH.qualifiedMaxCount, Literal(max_count)))
 
+    @staticmethod
+    def _warn_about_merged_slots(shape: NodeShapeSpec, group: PropertyGroup) -> None:
+        """Warn that slots sharing a predicate were merged: satisfiable SHACL, but likely not what the schema means."""
+        other_fix = " (or their classes distinct class_uris)" if len(shape.classes) > 1 else ""
+        logger.warning(
+            "Slots %s share slot_uri %s, so shape %s checks them in one property shape: their ranges are combined "
+            "with sh:or and each slot's cardinality becomes a qualified count. This may not be what you intended; "
+            "consider giving the slots distinct slot_uris%s.",
+            [f"{slot.owner}.{slot.name}" for slot in group.slots],
+            group.path,
+            shape.uri,
+            other_fix,
+        )
+
+    # -------------------------------------------------------------------
+    # Classes sharing a class_uri: role shapes (native names only)
+    # -------------------------------------------------------------------
+
+    def _warn_about_role_groups(self) -> None:
+        """Explain what happens to each group of classes sharing a ``class_uri`` and warn where it cannot work."""
+        sv = self.schemaview
+        for group in self._roles.groups:
+            if len(group.roots) > 1:
+                logger.warning(
+                    "Classes %s share class_uri %s without a common parent, so none of them gets sh:targetClass. "
+                    "The role union shape %s targets the class instead and requires a node to conform to one of "
+                    "the shapes of %s. This is probably not intended: give the classes a common parent or "
+                    "distinct class_uris.",
+                    list(group.roots),
+                    group.class_uri,
+                    self._role_union_shape_uri(group.class_uri),
+                    list(group.classes),
+                )
+                closed_roots = [root for root in group.roots if self._is_closed(sv.get_class(root))]
+                if closed_roots:
+                    logger.warning(
+                        "Classes %s share class_uri %s without a common parent, but %s are closed. A closed shape "
+                        "rejects the properties of the other classes; make them abstract or mixins, or generate "
+                        "with --non-closed.",
+                        list(group.roots),
+                        group.class_uri,
+                        closed_roots,
+                    )
+            elif group.roles_relaxing_root:
+                logger.warning(
+                    "Classes %s share class_uri %s, but %s accept more than their parent %s for some slots (see the "
+                    "following warnings). Targeting %s would reject their valid nodes, so none of the classes gets "
+                    "sh:targetClass; the role union shape %s targets the class instead and requires a node to "
+                    "conform to one of their shapes. Consider making the subclasses refine %s rather than relax it.",
+                    list(group.classes),
+                    group.class_uri,
+                    list(group.roles_relaxing_root),
+                    group.roots[0],
+                    group.roots[0],
+                    self._role_union_shape_uri(group.class_uri),
+                    group.roots[0],
+                )
+            else:
+                logger.warning(
+                    "Classes %s share class_uri %s, so only %s gets sh:targetClass. The other classes become role "
+                    "shapes, checked only where a slot's range names them.",
+                    list(group.classes),
+                    group.class_uri,
+                    group.roots[0],
+                )
+            self._warn_about_relaxed_roles(group)
+
+    def _warn_about_relaxed_roles(self, group: SharedClassUriGroup) -> None:
+        """Warn about classes that accept more than their parent in the group for some slot.
+
+        A role is meant to be a specialisation of its parent; if it relaxes a slot, a node can conform to the
+        role's shape and still fail the parent's.
+        """
+        sv = self.schemaview
+        for name in group.classes:
+            for parent in sv.class_ancestors(name, imports=True, mixins=True, reflexive=False):
+                if parent not in group.classes:
+                    continue
+                parent_slots = {slot.name: slot for slot in sv.class_induced_slots(parent)}
+                for slot in sv.class_induced_slots(name):
+                    if slot.name not in parent_slots:
+                        continue
+                    for relaxation in relaxed_constraints(sv, parent_slots[slot.name], slot):
+                        logger.warning(
+                            "Class %s (role of %s, class_uri %s) loosens slot %s: %s. A node valid for the role "
+                            "may then be invalid for its parent.",
+                            name,
+                            parent,
+                            group.class_uri,
+                            slot.name,
+                            relaxation,
+                        )
+
+    def _role_union_shape_uri(self, class_uri: str) -> URIRef:
+        """IRI of the role union shape for *class_uri*, in the schema's default prefix (suffix appended)."""
+        sv = self.schemaview
+        uri = sv.expand_curie(f"{sv.schema.default_prefix}:{role_union_shape_name(sv, class_uri)}")
+        return URIRef(uri + (self.suffix or ""))
+
+    def _add_role_union_shapes(self, g: Graph) -> None:
+        """Add a role union shape for each group of classes sharing a ``class_uri`` in which no class can be targeted.
+
+        That is a group with several roots, or one where a class relaxes the root (see :class:`RolePlan`). The
+        role union shape targets the ``class_uri`` instead and requires each node to conform to at least one of the
+        group's shapes. It is open and has no property shapes of its own.
+        """
+        for group in self._roles.groups:
+            if not group.needs_role_union:
+                continue
+            shape_pv = _triple_adder(g, self._role_union_shape_uri(group.class_uri))
+            shape_pv(RDF.type, SH.NodeShape)
+            shape_pv(SH.targetClass, URIRef(group.class_uri))
+            shape_pv(SH.closed, Literal(False))
+            # rdfs:comment rather than sh:description on node shapes, see issue #3059
+            shape_pv(
+                RDFS.comment,
+                Literal(
+                    f"Generated: the classes {', '.join(group.classes)} share this class and none of them can be "
+                    "targeted alone; a node must conform to at least one of their shapes."
+                ),
+            )
+            branches = []
+            for name in group.classes:
+                branch = BNode()
+                g.add((branch, SH.node, self._shape_uri(name)))
+                branches.append(branch)
+            shape_pv(SH["or"], _rdf_list(g, branches))
+
     # -------------------------------------------------------------------
     # Recommended slots -> sh:Warning
     # -------------------------------------------------------------------
 
-    def _add_recommendations(self, g: Graph) -> None:
-        """Emit ``recommended: true`` slots as ``sh:Warning`` constraints in ``<shape>Recommendations`` shapes.
+    def _add_recommendation_shapes(self, g: Graph, node_shapes: list[NodeShapeSpec]) -> None:
+        """Emit ``recommended: true`` slots as ``sh:Warning`` constraints, in ``<shape>Recommendations`` shapes.
 
-        A class with recommended slots gets a sibling shape, targeted like the class itself. A target-less
-        role shape cannot be targeted, so its recommendations are checked through the slots that reference
-        it: the referencing class' recommendations shape gets a warning-level property shape on that path
-        with ``sh:node`` pointing at the role shape's recommendations. That way they only apply to values
-        reached through that slot, not to every use of the predicate. Where the slot's predicate is shared
-        or its range a union, the ``sh:node`` is guarded to values of the role class.
+        The warnings get shapes of their own because a node conforms to a nested shape (``sh:node``, ``sh:or``,
+        ...) only if it produces no validation result at all, whatever its severity: inside a hard shape, a
+        warning would fail every shape that nests it.
+
+        A recommendations shape is targeted like its node shape. Role shapes have no target, so theirs are
+        reached through the shapes that reference them: the referencing shape's recommendations get a
+        warning-level property shape on the referencing slot's path, with ``sh:node`` pointing at the role's
+        recommendations. They then apply only to values reached through that slot. Where the path is shared
+        with other slots or the slot has several ranges, the ``sh:node`` is limited to instances of the role
+        class. References that would make the shapes recursive are skipped (see
+        :attr:`RolePlan.recursive_references`).
         """
         sv = self.schemaview
-        classes = sv.all_classes(imports=not self.exclude_imports)
-        slot_groups = {name: self._slots_by_uri(cls) for name, cls in classes.items()}
-        own = {
-            name: [s for _, members in groups for s in members if s.recommended] for name, groups in slot_groups.items()
+        shape_of_class = {cls.name: shape for shape in node_shapes for cls in shape.classes}
+        recommended = {
+            shape.uri: [(group, slot) for group in shape.property_groups for slot in group.slots if slot.recommended]
+            for shape in node_shapes
         }
-        # references to role classes: (referencing slot, role class, is the use of the predicate ambiguous)
-        references: dict[str, list[tuple[SlotDefinition, str, bool]]] = {name: [] for name in classes}
-        for name, groups in slot_groups.items():
-            for _, members in groups:
-                for slot in members:
-                    for r in self._slot_ranges(slot):
-                        if r in self._untargeted_classes and r in classes:
-                            references[name].append((slot, r, len(members) > 1 or bool(slot.any_of)))
+        role_references = {
+            shape.uri: [
+                (group, slot, r)
+                for group in shape.property_groups
+                for slot in group.slots
+                for r in slot_ranges(slot)
+                if r in self._roles.role_classes
+                and r in shape_of_class
+                and (slot.owner, r) not in self._roles.recursive_references
+            ]
+            for shape in node_shapes
+        }
 
-        # Depth-first search, dropping back-edges so that the generated shapes are never recursive.
-        state: dict[str, bool] = {}  # class -> finished
-        needed: dict[str, bool] = {}
-        kept: dict[str, list[tuple[SlotDefinition, str, bool]]] = {name: [] for name in classes}
+        # A shape needs recommendations if it has recommended slots, or references a role shape that has some.
+        needed = {uri for uri, slots in recommended.items() if slots}
+        changed = True
+        while changed:
+            changed = False
+            for uri, references in role_references.items():
+                if uri not in needed and any(shape_of_class[r].uri in needed for _, _, r in references):
+                    needed.add(uri)
+                    changed = True
 
-        def visit(name: str) -> None:
-            state[name] = False
-            needed[name] = bool(own[name])
-            for slot, r, guarded in references[name]:
-                if state.get(r) is False:
-                    continue
-                if r not in state:
-                    visit(r)
-                if needed[r]:
-                    kept[name].append((slot, r, guarded))
-                    needed[name] = True
-            state[name] = True
+        def recommendations_uri(shape_uri: URIRef) -> URIRef:
+            return URIRef(str(shape_uri) + "Recommendations")
 
-        for name in classes:
-            if name not in state:
-                visit(name)
-
-        def recommendations_uri(name: str) -> URIRef:
-            return URIRef(str(self._shape_uri(name)) + "Recommendations")
-
-        for name, cls in classes.items():
-            if not needed[name]:
+        for shape in node_shapes:
+            if shape.uri not in needed:
                 continue
-            shape = recommendations_uri(name)
-            g.add((shape, RDF.type, SH.NodeShape))
-            if name not in self._untargeted_classes:
-                g.add((shape, SH.targetClass, URIRef(sv.get_uri(cls, expand=True))))
-            shared = {uri for uri, members in slot_groups[name] if len(members) > 1}
-            for slot in own[name]:
-                slot_uri = self._induced_slot_uri(slot)
+            recommendations = recommendations_uri(shape.uri)
+            g.add((recommendations, RDF.type, SH.NodeShape))
+            for cls in shape.classes:
+                if cls.name not in self._roles.role_classes:
+                    g.add((recommendations, SH.targetClass, URIRef(sv.get_uri(cls, expand=True))))
+
+            for group, slot in recommended[shape.uri]:
                 pnode = BNode()
-                g.add((shape, SH.property, pnode))
-                g.add((pnode, SH.path, slot_uri))
+                g.add((recommendations, SH.property, pnode))
+                g.add((pnode, SH.path, group.path))
                 g.add((pnode, SH.severity, SH.Warning))
                 g.add((pnode, SH.message, Literal(f"Recommended: {slot.title or slot.name}")))
-                if slot_uri in shared:
-                    g.add((pnode, SH.qualifiedValueShape, self._member_shape(g, slot, name)))
+                if group.is_merged:
+                    g.add((pnode, SH.qualifiedValueShape, self._slot_value_shape(g, slot)))
                     g.add((pnode, SH.qualifiedMinCount, Literal(1)))
                 else:
                     g.add((pnode, SH.minCount, Literal(1)))
-            for slot, r, guarded in kept[name]:
+
+            for group, slot, r in role_references[shape.uri]:
+                role_recommendations = recommendations_uri(shape_of_class[r].uri)
+                if shape_of_class[r].uri not in needed:
+                    continue
                 pnode = BNode()
-                g.add((shape, SH.property, pnode))
-                g.add((pnode, SH.path, self._induced_slot_uri(slot)))
+                g.add((recommendations, SH.property, pnode))
+                g.add((pnode, SH.path, group.path))
                 g.add((pnode, SH.severity, SH.Warning))
                 g.add((pnode, SH.message, Literal(f"Recommendations for {r} (via {slot.title or slot.name}) not met")))
-                role_recommendations = recommendations_uri(r)
-                if not guarded:
+                if not group.is_merged and not slot.any_of:
                     g.add((pnode, SH.node, role_recommendations))
                     continue
-                # values of other ranges sharing this predicate are none of this role's business
-                not_role, role_only, or_node = BNode(), BNode(), BNode()
-                class_test = BNode()
-                self._add_class_type(g, lambda p, v: g.add((class_test, p, v)), r)
-                g.add((not_role, SH["not"], class_test))
+                # Other slots' values on this path are none of this role's business: only check instances of r.
+                instance_of_role = BNode()
+                self._add_instance_of(g, _triple_adder(g, instance_of_role), r)
+                not_role, role_only = BNode(), BNode()
+                g.add((not_role, SH["not"], instance_of_role))
                 g.add((role_only, SH.node, role_recommendations))
-                Collection(g, or_node, [not_role, role_only])
-                g.add((pnode, SH["or"], or_node))
-
-    LINKML_ANY_URI = "https://w3id.org/linkml/Any"
+                g.add((pnode, SH["or"], _rdf_list(g, [not_role, role_only])))
 
     # -------------------------------------------------------------------
     # Rules → sh:sparql
@@ -1177,109 +982,119 @@ class ShaclGenerator(Generator):
         return f'"{value_name}"'
 
     def _slot_uri(self, sv, slot_name: str, cls: ClassDefinition) -> str:
-        """Resolve a slot name to a full IRI string for use in SPARQL queries.
+        """Resolve a slot name to a full IRI string for use in SPARQL queries, the same way as ``sh:path``."""
+        return str(slot_path(sv, sv.get_slot(slot_name) or SlotDefinition(slot_name)))
 
-        Mirrors the resolution logic used for ``sh:path`` in the main slot loop:
-        prefer ``sv.get_uri()`` for slots registered in the schema map, fall
-        back to ``default_prefix:underscored_name``.
-        """
-        slot = sv.get_slot(slot_name)
-        if slot and slot_name in sv.element_by_schema_map():
-            return sv.get_uri(slot, expand=True)
-        pfx = sv.schema.default_prefix
-        return sv.expand_curie(f"{pfx}:{underscore(slot_name)}")
+    # -------------------------------------------------------------------
+    # rdf:type slots (linkml#3931)
+    #
+    # A slot with slot_uri rdf:type records extra types of a node, but its predicate also carries the node's
+    # own class assertion (``a <class_uri>``). The property shape of such a slot therefore accepts the node's
+    # implicit types besides the slot's range, and does not count them.
+    # -------------------------------------------------------------------
 
-    def _own_types(self, cls: ClassDefinition) -> list[URIRef]:
-        """``class_uri`` of *cls*, of its ``is_a`` descendants and of its ancestors.
+    def _implicit_type_uris(self, classes: list[ClassDefinition]) -> list[URIRef]:
+        """IRIs a node of one of *classes* may carry as its own ``rdf:type``.
 
-        Instances of *cls* carry one of these as their own ``rdf:type`` triple, which a slot with
-        ``slot_uri: rdf:type`` shares a predicate with. Ancestors count too: an instance of *cls* is
-        also an instance of its superclasses, and a node reached through a role shape is typically
-        typed with the (shared) ``class_uri`` of the generic class as well.
+        These are the ``class_uri`` values of the classes, of their descendants and of their ancestors
+        (``is_a`` and mixins): an instance of a subclass is checked against its parents' shapes as well, and a
+        node reached through a role shape is typically also typed with the shared ``class_uri`` of its parent.
         """
         sv = self.schemaview
-        related = sv.class_descendants(cls.name, imports=True, mixins=True, reflexive=True) + sv.class_ancestors(
-            cls.name, imports=True, mixins=True, reflexive=False
-        )
-        return sorted({URIRef(sv.get_uri(c, expand=True)) for c in related}, key=str)
+        related: set[str] = set()
+        for cls in classes:
+            related.update(sv.class_descendants(cls.name, imports=True, mixins=True, reflexive=True))
+            related.update(sv.class_ancestors(cls.name, imports=True, mixins=True, reflexive=False))
+        return sorted({URIRef(sv.get_uri(name, expand=True)) for name in related}, key=str)
 
-    def _in_node(self, g: Graph, values: list[URIRef]) -> BNode:
-        node, lst = BNode(), BNode()
-        Collection(g, lst, values)
-        g.add((node, SH["in"], lst))
+    def _add_rdf_type_slot_range(
+        self, g: Graph, prop_pv: Callable, r: ElementName, implicit_types: list[URIRef], referencing_class: str
+    ) -> None:
+        """Range of an ``rdf:type`` slot: a value is an instance of range class *r*, or one of the implicit types."""
+        branches = [self._range_shape(g, r, referencing_class), self._sh_in_shape(g, implicit_types)]
+        prop_pv(SH["or"], _rdf_list(g, branches))
+
+    def _add_explicit_type_counts(
+        self, g: Graph, pnode: BNode, min_count: int | None, max_count: int | None, implicit_types: list[URIRef]
+    ) -> None:
+        """Cardinality of an ``rdf:type`` slot, counting only values that are not implicit types.
+
+        Plain ``sh:minCount``/``sh:maxCount`` would count the node's own class assertion too, so the bounds are
+        emitted as qualified counts over ``[ sh:not [ sh:in (implicit types) ] ]``.
+        """
+        if min_count is None and max_count is None:
+            return
+        explicit_value = BNode()
+        g.add((explicit_value, SH["not"], self._sh_in_shape(g, implicit_types)))
+        g.add((pnode, SH.qualifiedValueShape, explicit_value))
+        if min_count is not None:
+            g.add((pnode, SH.qualifiedMinCount, Literal(min_count)))
+        if max_count is not None:
+            g.add((pnode, SH.qualifiedMaxCount, Literal(max_count)))
+
+    @staticmethod
+    def _sh_in_shape(g: Graph, values: list[URIRef]) -> BNode:
+        """Blank node shape ``[ sh:in (values) ]``."""
+        node = BNode()
+        g.add((node, SH["in"], _rdf_list(g, values)))
         return node
 
-    def _add_type_slot_range(
-        self, g: Graph, prop_pv: Callable, r: ElementName, own_types: list[URIRef], source: str
-    ) -> None:
-        """Range constraint of an ``rdf:type`` slot: the value is the slot's range *or* the node's own class."""
-        range_node = BNode()
+    # -------------------------------------------------------------------
+    # Ranges
+    # -------------------------------------------------------------------
 
-        def range_pv(p, v):
-            if v is not None:
-                g.add((range_node, p, v))
+    LINKML_ANY_URI = "https://w3id.org/linkml/Any"
 
-        self._add_class(g, range_pv, r, source)
-        or_node = BNode()
-        Collection(g, or_node, [range_node, self._in_node(g, own_types)])
-        prop_pv(SH["or"], or_node)
+    def _add_range(self, g: Graph, func: Callable, r: ElementName, referencing_class: str) -> None:
+        """Constrain values to range *r* (a class, type, enum or built-in datatype) in a slot of *referencing_class*."""
+        sv = self.schemaview
+        if r in sv.all_classes():
+            self._add_class_range(g, func, r, referencing_class)
+        elif r in sv.all_types():
+            self._add_type(func, r)
+        elif r in sv.all_enums():
+            self._add_enum(g, func, r)
+        else:
+            add_simple_data_type(func, r)
 
-    def _qualify_type_counts(self, g: Graph, pnode: BNode, own_types: list[URIRef]) -> None:
-        """Cardinalities of an ``rdf:type`` slot count only the values other than the node's own class."""
-        moved = False
-        for old, new in ((SH.minCount, SH.qualifiedMinCount), (SH.maxCount, SH.qualifiedMaxCount)):
-            for o in list(g.objects(pnode, old)):
-                g.remove((pnode, old, o))
-                g.add((pnode, new, o))
-                moved = True
-        if moved:
-            qshape = BNode()
-            g.add((qshape, SH["not"], self._in_node(g, own_types)))
-            g.add((pnode, SH.qualifiedValueShape, qshape))
+    def _range_shape(self, g: Graph, r: ElementName, referencing_class: str) -> BNode:
+        """Blank node shape holding the constraints for values of range *r* (see :meth:`_add_range`)."""
+        node = BNode()
+        self._add_range(g, _triple_adder(g, node), r, referencing_class)
+        return node
 
-    def _add_class(self, g: Graph, func: Callable, r: ElementName, source: str | None = None) -> None:
-        """Add a class/shape constraint for range class *r*, referenced from class *source*.
-
-        Skips the constraint when *r* resolves to ``linkml:Any`` — the
-        LinkML meta-type representing an unconstrained range.
-
-        In default mode (``use_class_uri_names=True``): emits ``sh:class <class_uri>``
-        so validators check the RDF type hierarchy.
-
-        In native names mode (``use_class_uri_names=False``): emits ``sh:node <native_shape_uri>``
-        instead of ``sh:class``.  Using ``sh:class`` with a native shape URI (e.g.
-        ``dcatapplus:Resource``) is incorrect because data nodes are never typed as
-        that URI — it is a shape identifier, not an RDF class.  ``sh:node`` correctly
-        validates the referenced node against the named shape.
-
-        Because ``sh:node`` references a shape by its identifier, the ``suffix``
-        option has to be applied here too — otherwise the reference points at a
-        shape that was never emitted and the constraint silently passes.
-
-        Classes that share their ``class_uri`` with another class and have no ``sh:targetClass`` of their
-        own (role shapes) are always referenced by ``sh:node``, because nothing else would validate them.
-        ``sh:class`` is emitted alongside, since ``sh:node`` does not check the node's type. A reference
-        that would make the ``sh:node`` shapes recursive is left as ``sh:class`` only (see
-        :meth:`_find_recursive_references`).
-        """
+    def _is_linkml_any(self, r: ElementName) -> bool:
+        """Whether class *r* is ``linkml:Any``, the unconstrained range."""
         sv = self.schemaview
         cls = sv.get_class(r)
         if cls and getattr(cls, "class_uri", None) == "linkml:Any":
-            return
-        if sv.get_uri(r, expand=True, native=not self.use_class_uri_names) == self.LINKML_ANY_URI:
+            return True
+        return sv.get_uri(r, expand=True, native=not self.use_class_uri_names) == self.LINKML_ANY_URI
+
+    def _add_class_range(self, g: Graph, func: Callable, r: ElementName, referencing_class: str) -> None:
+        """Constrain values to range class *r*, in a slot of class *referencing_class*.
+
+        * class_uri names: ``sh:class <class_uri>``, so that validators check the value's RDF type.
+        * native names: ``sh:node <native shape of r>``. A native shape IRI (e.g. ``dcatapplus:Resource``) is a
+          shape identifier and not an RDF class, so ``sh:class`` on it would never match. If *r* shares its
+          ``class_uri`` with other classes, ``sh:class`` is added: ``sh:node`` does not check the type, and a role
+          shape is only ever checked through such a reference. The ``sh:node`` is left out where it would make the
+          shapes recursive (see :attr:`RolePlan.recursive_references`).
+
+        ``linkml:Any`` adds no constraint. The suffix is part of the shape IRI that ``sh:node`` refers to.
+        """
+        if self._is_linkml_any(r):
             return
         if self.use_class_uri_names:
-            self._add_class_type(g, func, r)
-            if r in self._untargeted_classes and (source, r) not in self._cut_references:
-                func(SH["node"], self._shape_uri(r))
+            self._add_instance_of(g, func, r)
             return
-        if r in self._collided_classes:
-            self._add_class_type(g, func, r)
-        if (source, r) not in self._cut_references:
+        if r in self._roles.shared_classes:
+            self._add_instance_of(g, func, r)
+        if (referencing_class, r) not in self._roles.recursive_references:
             func(SH["node"], self._shape_uri(r))
 
-    def _class_uris(self, r: ElementName) -> list[URIRef]:
-        """``class_uri`` of *r*, plus its descendants' if :attr:`include_range_class_descendants` is set."""
+    def _accepted_class_uris(self, r: ElementName) -> list[URIRef]:
+        """``class_uri`` of *r* and, with :attr:`include_range_class_descendants`, those of its descendants."""
         sv = self.schemaview
         uris = [URIRef(sv.get_uri(r, expand=True))]
         if self.include_range_class_descendants:
@@ -1287,34 +1102,27 @@ class ShaclGenerator(Generator):
             uris += sorted({URIRef(sv.get_uri(d, expand=True)) for d in descendants} - set(uris), key=str)
         return uris
 
-    def _add_class_type(self, g: Graph, func: Callable, r: ElementName) -> None:
-        """Constrain values to instances of class *r*: ``sh:class``, or an ``sh:or`` of it and its descendants."""
-        uris = self._class_uris(r)
+    def _add_instance_of(self, g: Graph, func: Callable, r: ElementName) -> None:
+        """Constrain values to instances of class *r*: ``sh:class``, or ``sh:or`` over the accepted class IRIs."""
+        uris = self._accepted_class_uris(r)
         if len(uris) == 1:
             func(SH["class"], uris[0])
             return
-        members = []
+        branches = []
         for uri in uris:
-            member = BNode()
-            g.add((member, SH["class"], uri))
-            members.append(member)
-        or_node = BNode()
-        Collection(g, or_node, members)
-        func(SH["or"], or_node)
+            branch = BNode()
+            g.add((branch, SH["class"], uri))
+            branches.append(branch)
+        func(SH["or"], _rdf_list(g, branches))
 
     def _add_enum(self, g: Graph, func: Callable, r: ElementName) -> None:
         sv = self.schemaview
         enum = sv.get_enum(r)
-        pv_node = BNode()
-        Collection(
-            g,
-            pv_node,
-            [
-                URIRef(sv.expand_curie(pv.meaning)) if pv.meaning else Literal(pv_name)
-                for pv_name, pv in enum.permissible_values.items()
-            ],
-        )
-        func(SH["in"], pv_node)
+        values = [
+            URIRef(sv.expand_curie(pv.meaning)) if pv.meaning else Literal(pv_name)
+            for pv_name, pv in enum.permissible_values.items()
+        ]
+        func(SH["in"], _rdf_list(g, values))
 
     # Type URIs denoting non-literal (IRI or blank-node) values.
     # SHACL §4.8.1 <https://www.w3.org/TR/shacl/#NodeKindConstraintComponent>
@@ -1357,35 +1165,13 @@ class ShaclGenerator(Generator):
         else:
             logger.error(f"No URI for type {rt.name}")
 
-    def _and_equals_string(self, g: Graph, func: Callable, values: list) -> None:
-        pv_node = BNode()
-        Collection(
-            g,
-            pv_node,
-            [Literal(v) for v in values],
-        )
-        func(SH["in"], pv_node)
-
-    def _add_subproperty_constraint(self, g: Graph, func: Callable, slot) -> None:
-        """
-        Add sh:in constraint from subproperty_of slot hierarchy.
-
-        Following metamodel semantics: "any ontological child (related to X via
-        an is_a relationship), is a valid value for the slot"
-
-        :param g: RDF graph to add to
-        :param func: Function to call with predicate and object
-        :param slot: SlotDefinition with subproperty_of set
-        """
-        values = self._get_subproperty_values(slot)
-        if values:
-            pv_node = BNode()
-            Collection(g, pv_node, values)
-            func(SH["in"], pv_node)
-
     def _get_subproperty_values(self, slot) -> list:
         """
         Get all valid values from slot hierarchy for subproperty_of constraint.
+
+        They become an ``sh:in`` constraint, following the metamodel semantics:
+        "any ontological child (related to X via an is_a relationship), is a valid
+        value for the slot".
 
         Values are formatted according to range type:
         - uri/uriorcurie: Returns URIRef objects with full URIs
@@ -1451,36 +1237,28 @@ class ShaclGenerator(Generator):
         else:
             return None
 
-    def _build_ignored_properties(self, g: Graph, c: ClassDefinition) -> BNode:
-        def collect_child_properties(class_name: str, output: set) -> None:
-            for childName in self.schemaview.class_children(class_name, imports=True, mixins=False, is_a=True):
-                output.update(
-                    {
-                        URIRef(self.schemaview.get_uri(prop, expand=True))
-                        for prop in self.schemaview.class_slots(childName)
-                    }
-                )
-                collect_child_properties(childName, output)
-
-        child_properties = set()
-        collect_child_properties(c.name, child_properties)
-
-        class_slot_uris = {
-            URIRef(self.schemaview.get_uri(prop, expand=True)) for prop in self.schemaview.class_slots(c.name)
-        }
-        ignored_properties = child_properties.difference(class_slot_uris)
-
-        list_node = BNode()
-        ignored_properties.add(RDF.type)
-        Collection(g, list_node, sorted(ignored_properties, key=str))
-
-        return list_node
-
 
 def add_simple_data_type(func: Callable, r: ElementName) -> None:
     for datatype in list(ShaclDataType):
         if datatype.linkml_type == r:
             func(SH.datatype, datatype.uri_ref)
+
+
+def _triple_adder(g: Graph, subject: Node) -> Callable[[URIRef, Node | None], None]:
+    """Function that adds ``(subject, predicate, value)`` to *g*, skipping ``None`` values."""
+
+    def add(predicate: URIRef, value: Node | None) -> None:
+        if value is not None:
+            g.add((subject, predicate, value))
+
+    return add
+
+
+def _rdf_list(g: Graph, items: list[Node]) -> BNode:
+    """Add an RDF list of *items* to *g* and return its head node."""
+    head = BNode()
+    Collection(g, head, items)
+    return head
 
 
 @shared_arguments(ShaclGenerator)
@@ -1561,13 +1339,12 @@ def add_simple_data_type(func: Callable, r: ElementName) -> None:
     ),
 )
 @click.option(
-    "--recommended",
-    type=click.Choice(RECOMMENDED_MODES),
-    default="ignore",
+    "--recommended-warnings/--no-recommended-warnings",
+    default=False,
     show_default=True,
     help=(
-        "How slots marked 'recommended: true' are handled. 'warning' emits them as sh:Warning constraints in "
-        "separate '<shape>Recommendations' shapes; 'ignore' (default) leaves them out."
+        "Emit slots marked 'recommended: true' as sh:Warning constraints, in separate '<shape>Recommendations' "
+        "shapes. Off by default, since any warning makes sh:conforms false."
     ),
 )
 @click.option(

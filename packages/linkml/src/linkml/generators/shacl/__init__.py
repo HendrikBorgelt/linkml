@@ -1,1 +1,1 @@
-__all__ = ["shacl_data_type", "shacl_ifabsent_processor"]
+__all__ = ["shacl_data_type", "shacl_ifabsent_processor", "shacl_shared_uris"]
