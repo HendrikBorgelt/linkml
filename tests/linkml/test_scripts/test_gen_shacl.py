@@ -1,5 +1,7 @@
 import pytest
+import rdflib
 from click.testing import CliRunner
+from rdflib import SH, URIRef
 
 from linkml.generators.shaclgen import cli
 
@@ -39,3 +41,47 @@ def test_recommended_warnings_flag(tmp_path, args, has_warnings):
     result = CliRunner().invoke(cli, [str(schema), *args])
     assert result.exit_code == 0, result.output
     assert ("sh:Warning" in result.output) is has_warnings
+
+
+EXTRA_SLOTS_SCHEMA = """
+id: http://example.org/extra
+name: extra
+prefixes:
+  ex: http://example.org/
+  linkml: https://w3id.org/linkml/
+default_prefix: ex
+imports:
+  - linkml:types
+classes:
+  Open:
+    slots: [title]
+    extra_slots:
+      allowed: true
+  Closed:
+    slots: [title]
+    extra_slots:
+      allowed: false
+  Default:
+    slots: [title]
+slots:
+  title:
+    range: string
+"""
+
+
+@pytest.mark.parametrize(
+    ("args", "default_closed"),
+    [([], True), (["--closed"], True), (["--non-closed"], False)],
+    ids=["default", "closed", "non-closed"],
+)
+def test_extra_slots_override_the_closed_flag(tmp_path, args, default_closed):
+    schema = tmp_path / "schema.yaml"
+    schema.write_text(EXTRA_SLOTS_SCHEMA)
+    result = CliRunner().invoke(cli, [str(schema), *args])
+    assert result.exit_code == 0, result.output
+    g = rdflib.Graph().parse(data=result.stdout, format="turtle")
+    ex = "http://example.org/"
+    assert g.value(URIRef(ex + "Open"), SH.closed).toPython() is False
+    assert g.value(URIRef(ex + "Closed"), SH.closed).toPython() is True
+    assert g.value(URIRef(ex + "Default"), SH.closed).toPython() is default_closed
+    assert set(g.subjects(SH.ignoredProperties, None)) == set(g.subjects(SH.closed, rdflib.Literal(True)))

@@ -11,6 +11,7 @@ Nothing here builds RDF or modifies the :class:`~linkml_runtime.utils.schemaview
 
 import copy
 import re
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from functools import cached_property
 
@@ -274,8 +275,9 @@ class SharedClassUriGroup:
     classes: tuple[str, ...]
     roots: tuple[str, ...]
     roles_relaxing_root: tuple[str, ...] = ()
-    """Classes of a single-root group that accept more than the root for some slot (see
-    :func:`relaxed_constraints`). Targeting the root would reject their valid nodes."""
+    """Classes of a single-root group that accept more than the root: for some slot (see
+    :func:`relaxed_constraints`), or properties the root's closed shape rejects (``extra_slots``). Targeting the
+    root would reject their valid nodes."""
 
     @property
     def needs_role_union(self) -> bool:
@@ -302,8 +304,9 @@ class RolePlan:
 
     The root's shape then applies to every node of the ``class_uri``, which only works if the other classes
     refine it. If the group has several roots, or one of its classes relaxes the root (``slot_usage`` lets a
-    subclass accept more than its parent), none of its classes is targeted. A *role union shape* targets the
-    ``class_uri`` instead and requires a node to conform to at least one of the group's shapes.
+    subclass accept more than its parent, or ``extra_slots`` opens a subclass of a closed root), none of its
+    classes is targeted. A *role union shape* targets the ``class_uri`` instead and requires a node to conform to
+    at least one of the group's shapes.
     """
 
     groups: list[SharedClassUriGroup] = field(default_factory=list)
@@ -322,8 +325,19 @@ class RolePlan:
         return set().union(*(group.classes for group in self.groups))
 
 
-def plan_role_shapes(sv: SchemaView, class_names: list[str]) -> RolePlan:
-    """Find the classes among *class_names* that share a ``class_uri`` and decide which become role shapes."""
+def plan_role_shapes(
+    sv: SchemaView,
+    class_names: list[str],
+    closed_classes: AbstractSet[str] = frozenset(),
+    open_classes: AbstractSet[str] = frozenset(),
+) -> RolePlan:
+    """Find the classes among *class_names* that share a ``class_uri`` and decide which become role shapes.
+
+    :param closed_classes: classes whose shapes are closed.
+    :param open_classes: classes whose nodes may carry properties the schema does not declare for them, e.g.
+        because their ``extra_slots`` allows it. Such a class relaxes a root among *closed_classes*: the root's
+        shape would reject its nodes.
+    """
     by_class_uri: dict[str, list[str]] = {}
     for name in class_names:
         by_class_uri.setdefault(sv.get_uri(name, expand=True), []).append(name)
@@ -336,7 +350,10 @@ def plan_role_shapes(sv: SchemaView, class_names: list[str]) -> RolePlan:
             for name in names
             if not set(names) & set(sv.class_ancestors(name, imports=True, mixins=True, reflexive=False))
         ]
-        roles_relaxing_root = _roles_relaxing_root(sv, roots[0], names) if len(roots) == 1 else []
+        roles_relaxing_root = []
+        if len(roots) == 1:
+            open_roles = open_classes if roots[0] in closed_classes else frozenset()
+            roles_relaxing_root = _roles_relaxing_root(sv, roots[0], names, open_roles)
         groups.append(
             SharedClassUriGroup(
                 class_uri, tuple(sorted(names)), tuple(sorted(roots)), tuple(sorted(roles_relaxing_root))
@@ -347,17 +364,23 @@ def plan_role_shapes(sv: SchemaView, class_names: list[str]) -> RolePlan:
     return plan
 
 
-def _roles_relaxing_root(sv: SchemaView, root: str, class_names: list[str]) -> list[str]:
-    """Classes among *class_names* that accept more than *root* for a slot they share with it."""
+def _roles_relaxing_root(sv: SchemaView, root: str, class_names: list[str], open_roles: AbstractSet[str]) -> list[str]:
+    """Classes among *class_names* that accept more than *root*: for a slot they share with it, or by being open.
+
+    :param open_roles: classes accepting properties that *root*'s shape rejects (empty if *root*'s shape is open).
+    """
     root_slots = {slot.name: slot for slot in sv.class_induced_slots(root)}
     return [
         name
         for name in class_names
         if name != root
-        and any(
-            relaxed_constraints(sv, root_slots[slot.name], slot)
-            for slot in sv.class_induced_slots(name)
-            if slot.name in root_slots
+        and (
+            name in open_roles
+            or any(
+                relaxed_constraints(sv, root_slots[slot.name], slot)
+                for slot in sv.class_induced_slots(name)
+                if slot.name in root_slots
+            )
         )
     ]
 

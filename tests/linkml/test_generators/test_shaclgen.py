@@ -248,9 +248,21 @@ def test_shacl(kitchen_sink_path):
 
 
 def test_shacl_closed(kitchen_sink_path):
-    """tests shacl generation"""
+    """With --non-closed every shape is open, so none gets sh:ignoredProperties (#3539)."""
     shaclstr = ShaclGenerator(kitchen_sink_path, mergeimports=True, closed=False).serialize()
     do_test(shaclstr, EXPECTED_closed, EXPECTED_any_of, EXPECTED_equals_string)
+    g = rdflib.Graph().parse(data=shaclstr)
+    assert set(g.objects(None, SH.closed)) == {Literal(False)}
+    assert list(g.triples((None, SH.ignoredProperties, None))) == []
+
+
+def test_shacl_ignored_properties_only_on_closed_shapes(kitchen_sink_path):
+    """sh:ignoredProperties only matters on a closed shape, so open ones (mixins, abstract classes) get none (#3539)."""
+    g = rdflib.Graph().parse(data=ShaclGenerator(kitchen_sink_path, mergeimports=True).serialize())
+    closed = set(g.subjects(SH.closed, Literal(True)))
+    open_shapes = set(g.subjects(SH.closed, Literal(False)))
+    assert closed and open_shapes
+    assert set(g.subjects(SH.ignoredProperties, None)) == closed
 
 
 def test_shacl_suffix(kitchen_sink_path):
@@ -501,7 +513,12 @@ def test_ignore_subclass_properties(input_path):
         (subject, predicate, object) = triple
         ignored_properties[subject] = list(Collection(g, object))
 
-    assert count == 7
+    # The mixins CanFly and CanSwim get open shapes, which have no sh:ignoredProperties (#3539)
+    assert count == 5
+    for mixin in ("CanFly", "CanSwim"):
+        mixin_shape = URIRef(f"https://w3id.org/linkml/examples/animals/{mixin}")
+        assert mixin_shape not in ignored_properties
+        assert (mixin_shape, SH.closed, Literal(False)) in g
     assert frozenset(ignored_properties[URIRef("https://w3id.org/linkml/examples/animals/Animal")]) == frozenset(
         [
             URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
@@ -511,12 +528,6 @@ def test_ignore_subclass_properties(input_path):
             URIRef("https://w3id.org/linkml/examples/animals/ocean"),
             URIRef("https://w3id.org/linkml/examples/animals/name"),
         ]
-    )
-    assert frozenset(ignored_properties[URIRef("https://w3id.org/linkml/examples/animals/CanFly")]) == frozenset(
-        [URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")]
-    )
-    assert frozenset(ignored_properties[URIRef("https://w3id.org/linkml/examples/animals/CanSwim")]) == frozenset(
-        [URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")]
     )
     assert frozenset(ignored_properties[URIRef("https://w3id.org/linkml/examples/animals/Mammal")]) == frozenset(
         [
@@ -555,7 +566,7 @@ def test_ignored_properties_list_is_sorted(input_path):
         elements = [str(e) for e in Collection(g, list_node)]
         assert elements == sorted(elements), f"sh:ignoredProperties list not sorted: {elements}"
         lists_checked += 1
-    assert lists_checked == 7
+    assert lists_checked == 5
 
 
 def test_multivalued_slot_min_cardinality(input_path):

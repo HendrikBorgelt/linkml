@@ -104,6 +104,25 @@ class ShaclGenerator(Generator):
     same external ontology class and you need distinct validation shapes per class.
     See `#3011 <https://github.com/linkml/linkml/issues/3011>`_ for background.
 
+    **Closed and open shapes.** A closed shape (``sh:closed true``) rejects every property it does not declare.
+    A class's own ``extra_slots`` decides, as in the JSON Schema generator:
+
+    * ``allowed: true``: open;
+    * ``allowed: false``, or neither ``allowed`` nor ``range_expression``: closed;
+    * a ``range_expression`` without ``allowed``: open, and a warning is logged. SHACL Core cannot constrain the
+      properties a shape does not declare, so the expression is not enforced (a SHACL-SPARQL ``sh:sparql``
+      constraint could, but is not generated).
+
+    Without ``extra_slots``, :attr:`closed` (``--closed``/``--non-closed``) decides, and the shapes of mixins and
+    abstract classes are open. ``extra_slots`` is not inherited: the metamodel does not pass it down, see
+    `#3887 <https://github.com/linkml/linkml/issues/3887>`_ and `#4145 <https://github.com/linkml/linkml/issues/4145>`_.
+    Nor does it loosen the shapes of a class's ancestors: a node checked against a closed ancestor shape, for
+    instance through ``sh:node`` or through RDFS inference, must still do without undeclared properties.
+
+    A closed shape gets ``sh:ignoredProperties``: ``rdf:type`` and the properties of its descendants (``is_a`` and
+    mixins), so that their instances pass it. Open shapes do not get it, as it would have no effect
+    (`#3539 <https://github.com/linkml/linkml/issues/3539>`_).
+
     **Classes sharing a class_uri.** RDF cannot tell such classes apart: a node typed with the ``class_uri`` is
     checked against every shape that targets it. With class_uri names the classes are emitted into one shape,
     with one ``sh:targetClass``, one property shape per predicate (see below) and the ``sh:ignoredProperties`` of
@@ -114,9 +133,10 @@ class ShaclGenerator(Generator):
     become *role shapes*: shapes without a target, checked only where a slot's range names them, through
     ``sh:class <class_uri>`` plus ``sh:node <role shape>``. The root's shape then applies to every node of the
     ``class_uri``. So if the group has several roots, or a class relaxes the root (``slot_usage`` lets a subclass
-    accept more than its parent), none of its classes is targeted; a *role union shape*
-    ``<local name of the class_uri>Roles`` targets the ``class_uri`` instead and requires a node to conform to at
-    least one of the group's shapes. Each of these cases is logged as a warning.
+    accept more than its parent, or ``extra_slots`` opens a subclass of a closed root), none of its classes is
+    targeted; a *role union shape* ``<local name of the class_uri>Roles`` targets the ``class_uri`` instead and
+    requires a node to conform to at least one of the group's shapes. A role union shape is always open. Each of
+    these cases is logged as a warning.
 
     **Slots sharing a slot_uri.** A property shape checks every value on its path, whichever LinkML slot the
     value was meant for. Separate property shapes for slots sharing a ``slot_uri`` would therefore contradict
@@ -147,7 +167,12 @@ class ShaclGenerator(Generator):
 
     # ClassVars
     closed: bool = True
-    """True means add 'sh:closed=true' to all shapes, except for the shapes of mixins and abstract classes"""
+    """Default closedness of class shapes: True gives ``sh:closed true``, False ``sh:closed false``.
+
+    It applies to classes without ``extra_slots``, except that the shapes of mixins and abstract classes are open
+    either way. An explicit ``extra_slots`` on a class takes precedence over this option; see *Closed and open
+    shapes* in the class documentation.
+    """
     suffix: str = None
     """parameterized suffix to be appended. No suffix per default."""
     include_annotations: bool = False
@@ -285,8 +310,17 @@ class ShaclGenerator(Generator):
         for pfx in self.schema.prefixes.values():
             g.bind(str(pfx.prefix_prefix), pfx.prefix_reference)
 
-        class_names = list(sv.all_classes(imports=not self.exclude_imports))
-        self._roles = RolePlan() if self.use_class_uri_names else plan_role_shapes(sv, class_names)
+        classes = list(sv.all_classes(imports=not self.exclude_imports).values())
+        self._warn_about_unenforced_extra_slots(classes)
+        if self.use_class_uri_names:
+            self._roles = RolePlan()
+        else:
+            self._roles = plan_role_shapes(
+                sv,
+                [cls.name for cls in classes],
+                closed_classes={cls.name for cls in classes if self._is_closed(cls)},
+                open_classes={cls.name for cls in classes if self._accepts_undeclared_properties(cls)},
+            )
         self._warn_about_role_groups()
 
         ifabsent_processor = ShaclIfAbsentProcessor(sv)
@@ -327,20 +361,59 @@ class ShaclGenerator(Generator):
         return URIRef(uri + (self.suffix or ""))
 
     def _is_closed(self, cls: ClassDefinition) -> bool:
-        """Whether *cls* on its own gets a closed shape: with :attr:`closed`, unless it is a mixin or abstract."""
-        return bool(self.closed and not cls.mixin and not cls.abstract)
+        """Whether *cls* on its own gets a closed shape.
+
+        The class's own ``extra_slots`` decides if it has one (see :func:`_extra_slots_closed`), whatever
+        :attr:`closed` says. Otherwise :attr:`closed` decides, except that mixins and abstract classes are open.
+        """
+        closed = _extra_slots_closed(cls)
+        if closed is None:
+            closed = self.closed and not cls.mixin and not cls.abstract
+        return bool(closed)
+
+    def _accepts_undeclared_properties(self, cls: ClassDefinition) -> bool:
+        """Whether a node of *cls* may carry properties that the schema does not declare for the class.
+
+        That is the case if its shape is open, unless it is open only for being a mixin or abstract: such a class
+        has no nodes of its own; they are instances of other classes, which decide for themselves.
+        """
+        if cls.extra_slots is None and (cls.mixin or cls.abstract):
+            return False
+        return not self._is_closed(cls)
+
+    @staticmethod
+    def _warn_about_unenforced_extra_slots(classes: list[ClassDefinition]) -> None:
+        """Warn about classes whose ``extra_slots`` accept extra data matching a ``range_expression``.
+
+        SHACL Core can constrain the values of a given path, but not "every property the shape does not declare",
+        so the shapes of these classes are left open and the expression is not enforced.
+        """
+        # A SHACL-SPARQL constraint (sh:sparql) selecting the values of all undeclared predicates could enforce
+        # the range_expression; it is not implemented.
+        for cls in classes:
+            extra_slots = cls.extra_slots
+            if extra_slots is not None and extra_slots.allowed is None and extra_slots.range_expression:
+                logger.warning(
+                    "Class %s allows extra slots that match a range_expression. SHACL Core cannot constrain "
+                    "properties that a shape does not declare, so its shape is left open and the range_expression "
+                    "is not enforced.",
+                    cls.name,
+                )
 
     def _add_node_shape(self, g: Graph, shape: NodeShapeSpec, ifabsent_processor: ShaclIfAbsentProcessor) -> None:
         """Add the node shape described by *shape*, with one property shape per predicate and its classes' rules.
 
         A shape of several classes is closed only if each of the classes would be, and its
-        ``sh:ignoredProperties`` combine theirs.
+        ``sh:ignoredProperties`` combine theirs. Only closed shapes get ``sh:ignoredProperties``: an open shape
+        accepts every property anyway (`#3539 <https://github.com/linkml/linkml/issues/3539>`_).
         """
         sv = self.schemaview
         shape_pv = _triple_adder(g, shape.uri)
         shape_pv(RDF.type, SH.NodeShape)
-        shape_pv(SH.closed, Literal(all(self._is_closed(cls) for cls in shape.classes)))
-        shape_pv(SH.ignoredProperties, self._build_ignored_properties(g, shape.classes))
+        closed = all(self._is_closed(cls) for cls in shape.classes)
+        shape_pv(SH.closed, Literal(closed))
+        if closed:
+            shape_pv(SH.ignoredProperties, self._build_ignored_properties(g, shape.classes))
         for cls in shape.classes:
             if cls.name not in self._roles.role_classes:
                 shape_pv(SH.targetClass, URIRef(sv.get_uri(cls, expand=True)))
@@ -368,10 +441,11 @@ class ShaclGenerator(Generator):
                 self._add_rules(g, shape.uri, cls)
 
     def _build_ignored_properties(self, g: Graph, classes: list[ClassDefinition]) -> BNode:
-        """``sh:ignoredProperties`` of a node shape: ``rdf:type`` and the properties that only subclasses have.
+        """``sh:ignoredProperties`` of a closed node shape: ``rdf:type`` and the properties only descendants have.
 
-        A closed shape rejects every property it does not list; ignoring the properties of ``is_a`` subclasses
-        lets an instance of a subclass pass the shape of its parent.
+        A closed shape rejects every property it does not list; ignoring the properties of descendants lets an
+        instance of a subclass pass the shape of its parent. Descendants through mixins count too: a mixin made
+        closed with ``extra_slots`` would otherwise reject every class that uses it.
         """
         sv = self.schemaview
         ignored = {RDF.type}
@@ -379,7 +453,7 @@ class ShaclGenerator(Generator):
             own_properties = {URIRef(sv.get_uri(slot, expand=True)) for slot in sv.class_slots(cls.name)}
             subclass_properties = {
                 URIRef(sv.get_uri(slot, expand=True))
-                for subclass in sv.class_descendants(cls.name, imports=True, mixins=False, reflexive=False)
+                for subclass in sv.class_descendants(cls.name, imports=True, mixins=True, reflexive=False)
                 for slot in sv.class_slots(subclass)
             }
             ignored |= subclass_properties - own_properties
@@ -585,16 +659,17 @@ class ShaclGenerator(Generator):
                 if closed_roots:
                     logger.warning(
                         "Classes %s share class_uri %s without a common parent, but %s are closed. A closed shape "
-                        "rejects the properties of the other classes; make them abstract or mixins, or generate "
-                        "with --non-closed.",
+                        "rejects the properties of the other classes; open them with extra_slots (allowed: true), "
+                        "make them abstract or mixins, or generate with --non-closed (which does not override "
+                        "extra_slots).",
                         list(group.roots),
                         group.class_uri,
                         closed_roots,
                     )
             elif group.roles_relaxing_root:
                 logger.warning(
-                    "Classes %s share class_uri %s, but %s accept more than their parent %s for some slots (see the "
-                    "following warnings). Targeting %s would reject their valid nodes, so none of the classes gets "
+                    "Classes %s share class_uri %s, but %s accept more than their parent %s (see the following "
+                    "warnings). Targeting %s would reject their valid nodes, so none of the classes gets "
                     "sh:targetClass; the role union shape %s targets the class instead and requires a node to "
                     "conform to one of their shapes. Consider making the subclasses refine %s rather than relax it.",
                     list(group.classes),
@@ -616,16 +691,25 @@ class ShaclGenerator(Generator):
             self._warn_about_relaxed_roles(group)
 
     def _warn_about_relaxed_roles(self, group: SharedClassUriGroup) -> None:
-        """Warn about classes that accept more than their parent in the group for some slot.
+        """Warn about classes that accept more than their parent in the group: for some slot, or by being open.
 
-        A role is meant to be a specialisation of its parent; if it relaxes a slot, a node can conform to the
-        role's shape and still fail the parent's.
+        A role is meant to be a specialisation of its parent; if it relaxes a slot, or accepts properties that its
+        parent's closed shape rejects, a node can conform to the role's shape and still fail the parent's.
         """
         sv = self.schemaview
         for name in group.classes:
             for parent in sv.class_ancestors(name, imports=True, mixins=True, reflexive=False):
                 if parent not in group.classes:
                     continue
+                if self._accepts_undeclared_properties(sv.get_class(name)) and self._is_closed(sv.get_class(parent)):
+                    logger.warning(
+                        "Class %s (role of %s, class_uri %s) accepts properties the schema does not declare "
+                        "(extra_slots, or --non-closed), but the shape of %s is closed and rejects them.",
+                        name,
+                        parent,
+                        group.class_uri,
+                        parent,
+                    )
                 parent_slots = {slot.name: slot for slot in sv.class_induced_slots(parent)}
                 for slot in sv.class_induced_slots(name):
                     if slot.name not in parent_slots:
@@ -1238,6 +1322,38 @@ class ShaclGenerator(Generator):
             return None
 
 
+def _extra_slots_closed(cls: ClassDefinition) -> bool | None:
+    """Whether the ``extra_slots`` of *cls* closes its shape, or ``None`` if the class has no ``extra_slots``.
+
+    This follows the metamodel, as :meth:`JsonSchemaGenerator.get_additional_properties
+    <linkml.generators.jsonschemagen.JsonSchemaGenerator.get_additional_properties>` does:
+
+    * ``allowed: true`` opens the shape, ``allowed: false`` closes it, whatever the ``range_expression``;
+    * a ``range_expression`` without ``allowed`` opens it: SHACL Core cannot constrain the properties a shape does
+      not declare, so the expression is not enforced (see
+      :meth:`ShaclGenerator._warn_about_unenforced_extra_slots`);
+    * neither ``allowed`` nor ``range_expression`` closes it.
+
+    Only the class's own ``extra_slots`` counts. The metamodel does not pass it down to subclasses, and documents
+    an absent ``extra_slots`` as closed, so it is not inherited here; see
+    `#3887 <https://github.com/linkml/linkml/issues/3887>`_ and `#4145 <https://github.com/linkml/linkml/issues/4145>`_.
+
+    >>> _extra_slots_closed(ClassDefinition("C"))
+    >>> _extra_slots_closed(ClassDefinition("C", extra_slots={"allowed": True}))
+    False
+    >>> _extra_slots_closed(ClassDefinition("C", extra_slots={"range_expression": {"range": "string"}}))
+    False
+    >>> _extra_slots_closed(ClassDefinition("C", extra_slots={}))
+    True
+    """
+    extra_slots = cls.extra_slots
+    if extra_slots is None:
+        return None
+    if extra_slots.allowed is not None:
+        return not extra_slots.allowed
+    return not extra_slots.range_expression
+
+
 def add_simple_data_type(func: Callable, r: ElementName) -> None:
     for datatype in list(ShaclDataType):
         if datatype.linkml_type == r:
@@ -1267,7 +1383,8 @@ def _rdf_list(g: Graph, items: list[Node]) -> BNode:
     "--closed/--non-closed",
     default=True,
     show_default=True,
-    help="Use '--closed' to generate closed SHACL shapes. Use '--non-closed' to generate open SHACL shapes.",
+    help="Use '--closed' to generate closed SHACL shapes. Use '--non-closed' to generate open SHACL shapes. "
+    "Shapes of mixins and abstract classes are open either way. A class's own extra_slots takes precedence over both.",
 )
 @click.option(
     "-s",
