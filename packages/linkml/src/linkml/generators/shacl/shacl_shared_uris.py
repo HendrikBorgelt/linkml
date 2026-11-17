@@ -98,9 +98,25 @@ def cardinality_bounds(slot: SlotDefinition) -> tuple[int | None, int | None]:
     return min_count, max_count
 
 
+def is_ordered_list(slot: SlotDefinition) -> bool:
+    """Whether *slot*'s values form an ``rdf:List`` (multivalued with ``list_elements_ordered``, see #3531).
+
+    >>> is_ordered_list(SlotDefinition("s", multivalued=True, list_elements_ordered=True))
+    True
+    >>> is_ordered_list(SlotDefinition("s", list_elements_ordered=True))
+    False
+    """
+    return bool(slot.multivalued and slot.list_elements_ordered)
+
+
 def slot_value_key(slot: SlotDefinition) -> tuple:
     """What *slot* demands of each value: its ranges and value constraints. Equal keys accept equal values."""
-    return (tuple(slot_ranges(slot)), *(str(getattr(slot, attribute)) for attribute in SLOT_VALUE_CONSTRAINTS))
+    branch_patterns = tuple(expression.pattern for expression in slot.any_of)
+    return (
+        tuple(slot_ranges(slot)),
+        branch_patterns,
+        *(str(getattr(slot, attribute)) for attribute in SLOT_VALUE_CONSTRAINTS),
+    )
 
 
 def relaxed_constraints(sv: SchemaView, parent: SlotDefinition, child: SlotDefinition) -> list[str]:
@@ -213,14 +229,21 @@ class PropertyGroup:
 def group_slots_by_path(sv: SchemaView, slots: list[SlotDefinition]) -> list[PropertyGroup]:
     """Group *slots* by predicate, in the order in which each predicate first appears.
 
-    Slots on ``rdf:type`` are never grouped and keep a property shape each: the generator treats ``rdf:type``
-    specially (the node's own class assertion shares the predicate), and only does so for a single slot.
+    Two kinds of slots are never grouped and keep a property shape each:
+
+    * slots on ``rdf:type``: the generator treats ``rdf:type`` specially (the node's own class assertion
+      shares the predicate), and only does so for a single slot;
+    * ordered multivalued slots (:func:`is_ordered_list`): their values are ``rdf:List`` members, reached
+      through a path and counted in a way of their own. Another slot on the same predicate is then still
+      checked against the list's head node.
     """
     groups: list[PropertyGroup] = []
     by_path: dict[URIRef, PropertyGroup] = {}
     for slot in slots:
         path = slot_path(sv, slot)
-        if path in by_path and path != RDF.type:
+        if path == RDF.type or is_ordered_list(slot):
+            groups.append(PropertyGroup(path, [slot]))
+        elif path in by_path:
             by_path[path].slots.append(slot)
         else:
             by_path[path] = PropertyGroup(path, [slot])
