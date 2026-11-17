@@ -81,7 +81,9 @@ def test_extra_slots_override_the_closed_flag(tmp_path, args, default_closed):
     assert result.exit_code == 0, result.output
     g = rdflib.Graph().parse(data=result.stdout, format="turtle")
     ex = "http://example.org/"
-    assert g.value(URIRef(ex + "Open"), SH.closed).toPython() is False
-    assert g.value(URIRef(ex + "Closed"), SH.closed).toPython() is True
-    assert g.value(URIRef(ex + "Default"), SH.closed).toPython() is default_closed
+    # an open shape says sh:closed false with --closed, and nothing with --non-closed
+    open_statement = rdflib.Literal(False) if default_closed else None
+    assert g.value(URIRef(ex + "Open"), SH.closed) == open_statement
+    assert g.value(URIRef(ex + "Closed"), SH.closed) == rdflib.Literal(True)
+    assert g.value(URIRef(ex + "Default"), SH.closed) == (rdflib.Literal(True) if default_closed else None)
     assert set(g.subjects(SH.ignoredProperties, None)) == set(g.subjects(SH.closed, rdflib.Literal(True)))

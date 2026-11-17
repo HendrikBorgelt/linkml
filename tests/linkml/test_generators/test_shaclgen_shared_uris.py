@@ -760,6 +760,26 @@ def test_every_class_shape_has_one_closed_value_and_one_ignored_properties_list_
     assert closed_values == {True, False}
 
 
+@pytest.mark.parametrize("use_class_uri_names", [True, False])
+@pytest.mark.parametrize("closed", [True, False])
+def test_closed_statements_follow_the_closed_option(tmp_path, use_class_uri_names, closed):
+    # ROLE_UNION_SCHEMA plus a mixin: closed classes, an open mixin and (with native names) a role union shape
+    schema = ROLE_UNION_SCHEMA.replace("classes:\n", "classes:\n  Named:\n    mixin: true\n    slots: [a]\n", 1)
+    g = shapes(tmp_path, schema, use_class_uri_names=use_class_uri_names, closed=closed)
+    node_shapes = set(g.subjects(RDF.type, SH.NodeShape))
+    if not closed:
+        # open shapes are the SHACL default: nothing to say
+        assert (None, SH.closed, None) not in g
+        assert (None, SH.ignoredProperties, None) not in g
+        return
+    for shape in node_shapes:
+        is_closed = g.value(shape, SH.closed).toPython()
+        assert ((shape, SH.ignoredProperties, None) in g) is is_closed, shape
+    assert g.value(URIRef(EX + "Named"), SH.closed).toPython() is False
+    if not use_class_uri_names:
+        assert g.value(URIRef(EX + "SharedRoles"), SH.closed).toPython() is False
+
+
 def test_class_uri_names_give_classes_sharing_a_class_uri_one_property_shape_per_predicate(tmp_path, caplog):
     g = shapes(tmp_path, SHARED_SHAPE_SCHEMA, use_class_uri_names=True)
     entity = URIRef("http://www.w3.org/ns/prov#Entity")
@@ -947,3 +967,71 @@ def test_a_role_relaxing_its_parent_gets_a_role_union_shape(tmp_path, caplog):
 )
 def test_a_role_relaxing_its_parent_validates_its_own_nodes(tmp_path, data, conforms):
     assert run(shapes(tmp_path, RELAXED_ROLE_SCHEMA), data)[0] is conforms
+
+
+# ---------------------------------------------------------------------------
+# 10. merged slots whose constraints never reject a value (subset warning)
+#
+# If every value one merged slot accepts is also accepted by another, the sh:or never needs the narrower
+# slot's branch. Its constraints then only decide which values count towards its own cardinality.
+# ---------------------------------------------------------------------------
+SUBSET_SCHEMA = (
+    HEADER
+    + """
+classes:
+  Entity:
+    class_uri: prov:Entity
+  EvaluatedEntity:
+    is_a: Entity
+    class_uri: prov:Entity
+  Analysis:
+    class_uri: ex:Analysis
+    slots: [input_entity, evaluated_entity]
+slots:
+  input_entity:
+    slot_uri: prov:used
+    range: Entity
+    multivalued: true
+  evaluated_entity:
+    slot_uri: prov:used
+    range: EvaluatedEntity
+    multivalued: true
+"""
+)
+
+
+def subset_warnings(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if "is also accepted by slot" in r.getMessage()]
+
+
+@pytest.mark.parametrize("use_class_uri_names", [True, False])
+@pytest.mark.parametrize(
+    ("required", "consequence"),
+    [(False, "are never enforced"), (True, "only decide which values count towards its cardinality")],
+    ids=["no cardinality", "required"],
+)
+def test_warns_about_a_merged_slot_subsumed_by_another(tmp_path, caplog, use_class_uri_names, required, consequence):
+    schema = SUBSET_SCHEMA.replace("range: EvaluatedEntity\n", f"range: EvaluatedEntity\n    required: {required}\n")
+    shapes(tmp_path, schema, use_class_uri_names=use_class_uri_names)
+    warnings = subset_warnings(caplog)
+    assert len(warnings) == 1
+    assert "slot Analysis.evaluated_entity accepts is also accepted by slot Analysis.input_entity" in warnings[0]
+    assert consequence in warnings[0]
+
+
+def test_warns_about_a_pattern_that_another_slot_makes_irrelevant(tmp_path, caplog):
+    schema = PATTERN_SCHEMA.replace("    pattern: '^https?://'\n", "")
+    shapes(tmp_path, schema)
+    warnings = subset_warnings(caplog)
+    assert len(warnings) == 1
+    assert "slot Thing.doi accepts is also accepted by slot Thing.homepage" in warnings[0]
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [SLOT_COLLISION_SCHEMA, PATTERN_SCHEMA],
+    ids=["different class_uris", "each slot has its own pattern"],
+)
+def test_no_subset_warning_when_each_slot_restricts_values(tmp_path, caplog, schema):
+    shapes(tmp_path, schema)
+    assert subset_warnings(caplog) == []

@@ -252,6 +252,57 @@ def group_slots_by_path(sv: SchemaView, slots: list[SlotDefinition]) -> list[Pro
     return groups
 
 
+def subsumed_slots(
+    sv: SchemaView,
+    slots: list[SlotDefinition],
+    classes_share_shapes: bool,
+    closed_classes: AbstractSet[str] = frozenset(),
+    open_classes: AbstractSet[str] = frozenset(),
+) -> list[tuple[SlotDefinition, SlotDefinition]]:
+    """Pairs ``(narrow, broad)`` of merged *slots* where every value *narrow* accepts is also accepted by *broad*.
+
+    In the ``sh:or`` of the merged property shape, *narrow*'s branch then never decides whether a value is
+    allowed: its range and value constraints only matter for counting its own values, if it has a cardinality.
+    Only clear cases are reported, once per *narrow*:
+
+    * *broad* has no value constraints of its own, and
+    * each range of *narrow* is a range of *broad*, or a class that descends from one with the same
+      ``class_uri``. With class_uri names (*classes_share_shapes*) both classes are checked against the same
+      shape. With native names each has its own, so the descendant must also not relax its ancestor: neither
+      for a slot (:func:`class_relaxes`), nor by accepting undeclared properties (in *open_classes*) where the
+      ancestor's shape is closed (in *closed_classes*), as in :func:`plan_role_shapes`.
+    """
+
+    def has_value_constraints(slot: SlotDefinition) -> bool:
+        constrained = any(getattr(slot, attribute) not in (None, []) for attribute in SLOT_VALUE_CONSTRAINTS)
+        return constrained or any(expression.pattern for expression in slot.any_of)
+
+    def covers(broad_range: ElementName, narrow_range: ElementName) -> bool:
+        if narrow_range == broad_range:
+            return True
+        if not (narrow_range and broad_range and sv.get_class(narrow_range) and sv.get_class(broad_range)):
+            return False
+        return (
+            sv.get_uri(narrow_range, expand=True) == sv.get_uri(broad_range, expand=True)
+            and narrow_range in sv.class_descendants(broad_range, imports=True, mixins=True)
+            and (classes_share_shapes or not relaxes(broad_range, narrow_range))
+        )
+
+    def relaxes(parent: ElementName, child: ElementName) -> bool:
+        opened = child in open_classes and parent in closed_classes
+        return opened or class_relaxes(sv, parent, child)
+
+    pairs = []
+    for narrow in slots:
+        for broad in slots:
+            if narrow is broad or has_value_constraints(broad) or slot_value_key(narrow) == slot_value_key(broad):
+                continue
+            if all(any(covers(b, n) for b in slot_ranges(broad)) for n in slot_ranges(narrow)):
+                pairs.append((narrow, broad))
+                break
+    return pairs
+
+
 def shape_slots(sv: SchemaView, class_names: list[str]) -> list[SlotDefinition]:
     """Induced slots of all classes emitted into one node shape, with each distinct slot once.
 
@@ -387,25 +438,22 @@ def plan_role_shapes(
     return plan
 
 
+def class_relaxes(sv: SchemaView, parent: str, child: str) -> bool:
+    """Whether class *child* accepts more than class *parent* for a slot both have (see :func:`relaxed_constraints`)."""
+    parent_slots = {slot.name: slot for slot in sv.class_induced_slots(parent)}
+    return any(
+        relaxed_constraints(sv, parent_slots[slot.name], slot)
+        for slot in sv.class_induced_slots(child)
+        if slot.name in parent_slots
+    )
+
+
 def _roles_relaxing_root(sv: SchemaView, root: str, class_names: list[str], open_roles: AbstractSet[str]) -> list[str]:
     """Classes among *class_names* that accept more than *root*: for a slot they share with it, or by being open.
 
     :param open_roles: classes accepting properties that *root*'s shape rejects (empty if *root*'s shape is open).
     """
-    root_slots = {slot.name: slot for slot in sv.class_induced_slots(root)}
-    return [
-        name
-        for name in class_names
-        if name != root
-        and (
-            name in open_roles
-            or any(
-                relaxed_constraints(sv, root_slots[slot.name], slot)
-                for slot in sv.class_induced_slots(name)
-                if slot.name in root_slots
-            )
-        )
-    ]
+    return [name for name in class_names if name != root and (name in open_roles or class_relaxes(sv, root, name))]
 
 
 def _recursive_role_references(sv: SchemaView, class_names: list[str], role_classes: set[str]) -> set[tuple[str, str]]:

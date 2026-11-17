@@ -148,7 +148,9 @@ def test_extra_slots_decide_sh_closed_and_ignored_properties(tmp_path, closed, u
     for class_name, expected in EXPECTED_CLOSED.items():
         shape = URIRef(EX + class_name)
         is_closed = expected[0] if closed else expected[1]
-        assert list(g.objects(shape, SH.closed)) == [Literal(is_closed)], class_name
+        # an open shape says sh:closed false only with --closed; with --non-closed it says nothing
+        statement = [Literal(True)] if is_closed else [Literal(False)] if closed else []
+        assert list(g.objects(shape, SH.closed)) == statement, class_name
         assert len(list(g.objects(shape, SH.ignoredProperties))) == (1 if is_closed else 0), class_name
 
 

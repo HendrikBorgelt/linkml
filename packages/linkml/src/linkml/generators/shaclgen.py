@@ -32,6 +32,7 @@ from linkml.generators.shacl.shacl_shared_uris import (
     slot_path,
     slot_ranges,
     slot_value_key,
+    subsumed_slots,
 )
 from linkml.utils.generator import Generator, shared_arguments
 from linkml.utils.language_tags import LanguageTagResolver
@@ -131,7 +132,9 @@ class ShaclGenerator(Generator):
 
     A closed shape gets ``sh:ignoredProperties``: ``rdf:type`` and the properties of its descendants (``is_a`` and
     mixins), so that their instances pass it. Open shapes do not get it, as it would have no effect
-    (`#3539 <https://github.com/linkml/linkml/issues/3539>`_).
+    (`#3539 <https://github.com/linkml/linkml/issues/3539>`_). They say ``sh:closed false`` only with ``--closed``,
+    where it marks them as open on purpose; with ``--non-closed`` they carry no ``sh:closed``, as SHACL shapes are
+    open by default.
 
     **Classes sharing a class_uri.** RDF cannot tell such classes apart: a node typed with the ``class_uri`` is
     checked against every shape that targets it. With class_uri names the classes are emitted into one shape,
@@ -154,7 +157,9 @@ class ShaclGenerator(Generator):
     slot's ``sh:maxCount`` counts the other slots' values too. So slots of a shape that share a ``slot_uri`` are
     emitted as one property shape, with ``sh:or`` over their ranges, and each slot keeps its own cardinality as
     a qualified count (``sh:qualifiedValueShape``). This is logged as a warning, as it is often a modelling
-    accident.
+    accident. A second warning names a slot whose values another of the merged slots accepts anyway: its range
+    and value constraints then never reject a value, and at most decide which values count towards its own
+    cardinality.
 
     A slot with ``slot_uri: rdf:type`` shares its predicate with the node's own class assertion. Its property
     shape therefore also accepts the node's own types, and does not count them
@@ -177,11 +182,14 @@ class ShaclGenerator(Generator):
 
     # ClassVars
     closed: bool = True
-    """Default closedness of class shapes: True gives ``sh:closed true``, False ``sh:closed false``.
+    """Default closedness of the shapes of classes without their own ``extra_slots``.
 
-    It applies to classes without ``extra_slots``, except that the shapes of mixins and abstract classes are open
-    either way. An explicit ``extra_slots`` on a class takes precedence over this option; see *Closed and open
-    shapes* in the class documentation.
+    If True, these shapes are closed (``sh:closed true`` with ``sh:ignoredProperties``), except for the shapes of
+    mixins and abstract classes; if False, they are open. An explicit ``extra_slots`` on a class takes precedence
+    over this option; see *Closed and open shapes* in the class documentation.
+
+    Open shapes say ``sh:closed false`` only if this option is True. With False they carry no ``sh:closed`` at
+    all, as SHACL shapes are open by default.
     """
     suffix: str = None
     """parameterized suffix to be appended. No suffix per default."""
@@ -418,15 +426,19 @@ class ShaclGenerator(Generator):
 
         A shape of several classes is closed only if each of the classes would be, and its
         ``sh:ignoredProperties`` combine theirs. Only closed shapes get ``sh:ignoredProperties``: an open shape
-        accepts every property anyway (`#3539 <https://github.com/linkml/linkml/issues/3539>`_).
+        accepts every property anyway (`#3539 <https://github.com/linkml/linkml/issues/3539>`_). ``sh:closed false``
+        is only stated with :attr:`closed` (see there).
         """
         sv = self.schemaview
         shape_pv = _triple_adder(g, shape.uri)
         shape_pv(RDF.type, SH.NodeShape)
-        closed = all(self._is_closed(cls) for cls in shape.classes)
-        shape_pv(SH.closed, Literal(closed))
-        if closed:
+        if all(self._is_closed(cls) for cls in shape.classes):
+            shape_pv(SH.closed, Literal(True))
             shape_pv(SH.ignoredProperties, self._build_ignored_properties(g, shape.classes))
+        elif self.closed:
+            # With closed shapes requested, say that this one (a mixin, an abstract class, or a class opened by
+            # extra_slots) is open on purpose
+            shape_pv(SH.closed, Literal(False))
         for cls in shape.classes:
             if cls.name not in self._roles.role_classes:
                 shape_pv(SH.targetClass, URIRef(sv.get_uri(cls, expand=True)))
@@ -446,6 +458,7 @@ class ShaclGenerator(Generator):
         for order, group in enumerate(shape.property_groups):
             if group.is_merged:
                 self._warn_about_merged_slots(shape, group)
+                self._warn_about_subsumed_slots(shape, group)
             implicit_types = self._implicit_type_uris(shape.classes) if group.path == RDF.type else None
             self._add_property_shape(g, shape.uri, group, order, implicit_types, ifabsent_processor)
 
@@ -458,7 +471,8 @@ class ShaclGenerator(Generator):
 
         A closed shape rejects every property it does not list; ignoring the properties of descendants lets an
         instance of a subclass pass the shape of its parent. Descendants through mixins count too: a mixin made
-        closed with ``extra_slots`` would otherwise reject every class that uses it.
+        closed with ``extra_slots`` would otherwise reject every class that uses it. Open shapes get no such
+        list, as it would have no effect on them.
         """
         sv = self.schemaview
         ignored = {RDF.type}
@@ -692,6 +706,39 @@ class ShaclGenerator(Generator):
             other_fix,
         )
 
+    def _warn_about_subsumed_slots(self, shape: NodeShapeSpec, group: PropertyGroup) -> None:
+        """Warn about merged slots whose constraints never reject a value, because another slot accepts it anyway.
+
+        See :func:`subsumed_slots`. Such a slot's constraints still decide which values count towards its
+        cardinality, if it has one.
+        """
+        sv = self.schemaview
+        range_classes = [sv.get_class(r) for slot in group.slots for r in slot_ranges(slot) if r and sv.get_class(r)]
+        subsumed = subsumed_slots(
+            sv,
+            group.slots,
+            self.use_class_uri_names,
+            closed_classes={cls.name for cls in range_classes if self._is_closed(cls)},
+            open_classes={cls.name for cls in range_classes if self._accepts_undeclared_properties(cls)},
+        )
+        for narrow, broad in subsumed:
+            min_count, max_count = cardinality_bounds(narrow)
+            if min_count or max_count is not None:
+                consequence = "never reject a value; they only decide which values count towards its cardinality"
+            else:
+                consequence = "are never enforced"
+            logger.warning(
+                "Shape %s: every value that slot %s accepts is also accepted by slot %s (both on %s), so the range "
+                "and value constraints of %s %s. Give %s its own slot_uri if they should apply to every value.",
+                shape.uri,
+                f"{narrow.owner}.{narrow.name}",
+                f"{broad.owner}.{broad.name}",
+                group.path,
+                narrow.name,
+                consequence,
+                narrow.name,
+            )
+
     # -------------------------------------------------------------------
     # Classes sharing a class_uri: role shapes (native names only)
     # -------------------------------------------------------------------
@@ -800,7 +847,9 @@ class ShaclGenerator(Generator):
             shape_pv = _triple_adder(g, self._role_union_shape_uri(group.class_uri))
             shape_pv(RDF.type, SH.NodeShape)
             shape_pv(SH.targetClass, URIRef(group.class_uri))
-            shape_pv(SH.closed, Literal(False))
+            if self.closed:
+                # With closed shapes requested, say that this one is open on purpose
+                shape_pv(SH.closed, Literal(False))
             # rdfs:comment rather than sh:description on node shapes, see issue #3059
             shape_pv(
                 RDFS.comment,
@@ -1426,8 +1475,11 @@ def _rdf_list(g: Graph, items: list[Node]) -> BNode:
     "--closed/--non-closed",
     default=True,
     show_default=True,
-    help="Use '--closed' to generate closed SHACL shapes. Use '--non-closed' to generate open SHACL shapes. "
-    "Shapes of mixins and abstract classes are open either way. A class's own extra_slots takes precedence over both.",
+    help=(
+        "Use '--closed' to generate closed SHACL shapes (shapes of mixins and abstract classes stay open). "
+        "Use '--non-closed' to generate open SHACL shapes, which then carry no sh:closed. "
+        "A class's own extra_slots takes precedence over both."
+    ),
 )
 @click.option(
     "-s",

@@ -121,7 +121,9 @@ properties.
 
 Closed shapes get ``sh:ignoredProperties``: ``rdf:type`` and the properties of the class's descendants, so that
 instances of a subclass, or of a class using a mixin, pass the shape. Open shapes get none, as it would have no
-effect (`#3539 <https://github.com/linkml/linkml/issues/3539>`_).
+effect (`#3539 <https://github.com/linkml/linkml/issues/3539>`_). Open shapes say ``sh:closed false`` only with
+``--closed``, where it marks them as open on purpose; with ``--non-closed`` they carry no ``sh:closed`` at all,
+as SHACL shapes are open by default.
 
 Example: with this schema, ``Note`` shapes reject undeclared properties even with ``--non-closed``, while
 ``Annotation`` shapes accept them even with ``--closed``.
@@ -149,7 +151,9 @@ because this is often not intended:
 
 * **Slots sharing a slot_uri** become a single property shape with ``sh:or`` over their ranges. Each slot keeps
   its own cardinality as a qualified count (``sh:qualifiedValueShape``), and its own value constraints such as
-  ``pattern``. This applies with both naming modes.
+  ``pattern``. This applies with both naming modes. If one of the slots only accepts values another one accepts
+  anyway (e.g. a subclass with the same ``class_uri`` as its parent), a warning says that its constraints never
+  reject a value.
 * **Classes sharing a class_uri** are emitted into a single shape with ``--use-class-uri-names`` (the default).
   With ``--use-native-names`` every class keeps its own shape, but only the class without a parent in the group
   keeps ``sh:targetClass``; the others become *role shapes*, checked where a slot's range names them. A group of

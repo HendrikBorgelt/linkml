@@ -24,14 +24,6 @@ EXPECTED = [
     ),
 ]
 
-EXPECTED_closed = [
-    (
-        rdflib.term.URIRef("https://w3id.org/linkml/tests/kitchen_sink/Person"),
-        rdflib.term.URIRef("http://www.w3.org/ns/shacl#closed"),
-        rdflib.term.Literal("false", datatype=rdflib.term.URIRef("http://www.w3.org/2001/XMLSchema#boolean")),
-    ),
-]
-
 EXPECTED_suffix = [
     (
         rdflib.term.URIRef("https://w3id.org/linkml/tests/kitchen_sink/PersonShape"),
@@ -248,12 +240,12 @@ def test_shacl(kitchen_sink_path):
 
 
 def test_shacl_closed(kitchen_sink_path):
-    """With --non-closed every shape is open, so none gets sh:ignoredProperties (#3539)."""
+    """With --non-closed every shape is open: neither sh:closed nor sh:ignoredProperties is emitted (#3539)."""
     shaclstr = ShaclGenerator(kitchen_sink_path, mergeimports=True, closed=False).serialize()
-    do_test(shaclstr, EXPECTED_closed, EXPECTED_any_of, EXPECTED_equals_string)
+    do_test(shaclstr, [], EXPECTED_any_of, EXPECTED_equals_string)
     g = rdflib.Graph().parse(data=shaclstr)
-    assert set(g.objects(None, SH.closed)) == {Literal(False)}
-    assert list(g.triples((None, SH.ignoredProperties, None))) == []
+    assert (None, SH.closed, None) not in g
+    assert (None, SH.ignoredProperties, None) not in g
 
 
 def test_shacl_ignored_properties_only_on_closed_shapes(kitchen_sink_path):
@@ -566,6 +558,7 @@ def test_ignored_properties_list_is_sorted(input_path):
         elements = [str(e) for e in Collection(g, list_node)]
         assert elements == sorted(elements), f"sh:ignoredProperties list not sorted: {elements}"
         lists_checked += 1
+    # one list per closed shape; the shapes of the two mixins are open and have none
     assert lists_checked == 5
 
 
