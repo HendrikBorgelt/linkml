@@ -745,13 +745,19 @@ SHARED_SHAPE_INSTANCES = "ex:a1 a ex:A . ex:b1 a ex:B . ex:c1 a ex:C . "
 
 
 @pytest.mark.parametrize("use_class_uri_names", [True, False])
-def test_every_class_shape_has_one_closed_value_and_one_ignored_properties_list(tmp_path, use_class_uri_names):
+def test_every_class_shape_has_one_closed_value_and_one_ignored_properties_list_if_closed(
+    tmp_path, use_class_uri_names
+):
+    """A shape of several classes still gets a single sh:closed, and sh:ignoredProperties only if closed (#3539)."""
     g = shapes(tmp_path, SHARED_SHAPE_SCHEMA, use_class_uri_names=use_class_uri_names)
     class_shapes = [s for s in g.subjects(RDF.type, SH.NodeShape) if not str(s).endswith("Roles")]
-    assert class_shapes
+    closed_values = set()
     for shape in class_shapes:
         assert len(list(g.objects(shape, SH.closed))) == 1, shape
-        assert len(list(g.objects(shape, SH.ignoredProperties))) == 1, shape
+        closed = g.value(shape, SH.closed).toPython()
+        closed_values.add(closed)
+        assert len(list(g.objects(shape, SH.ignoredProperties))) == (1 if closed else 0), shape
+    assert closed_values == {True, False}
 
 
 def test_class_uri_names_give_classes_sharing_a_class_uri_one_property_shape_per_predicate(tmp_path, caplog):
